@@ -1,5 +1,7 @@
 # Mis Pagos
 
+> Este repositorio también contiene **[Asistente TDAH](asistente-tdah/README.md)**: captura por audio en Telegram, clasificación con Ollama local en seis categorías, recordatorios, Google Calendar y panel semanal (n8n).
+
 App web para el celular que sirve para registrar y controlar pagos mensuales en cuotas.
 
 ## Qué hace

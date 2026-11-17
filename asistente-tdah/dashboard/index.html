@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi semana</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --card: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #77756f;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --tarea: #2a78d6; --recordatorio: #eb6834; --evento: #1baf7a;
+  --bar: #2a78d6; --line: #2a78d6;
+  --good: #006300; --warn-bg: #fff4dc; --warn-ink: #7a4d00; --warn-dot: #fab219;
+  --crit: #d03b3b; --hoy: #eef4fd;
+  --btn: #f1f0ec; --btn-hover: #e6e5df;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a988f;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --tarea: #3987e5; --recordatorio: #d95926; --evento: #199e70;
+    --bar: #3987e5; --line: #3987e5;
+    --good: #0ca30c; --warn-bg: #2e2412; --warn-ink: #fab219; --warn-dot: #fab219;
+    --crit: #e66767; --hoy: #16233a;
+    --btn: #262624; --btn-hover: #31312e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #9a988f;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+  --tarea: #3987e5; --recordatorio: #d95926; --evento: #199e70;
+  --bar: #3987e5; --line: #3987e5;
+  --good: #0ca30c; --warn-bg: #2e2412; --warn-ink: #fab219; --warn-dot: #fab219;
+  --crit: #e66767; --hoy: #16233a;
+  --btn: #262624; --btn-hover: #31312e;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 18px; }
+h1 { font-size: 26px; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+.sub { color: var(--ink-2); font-size: 14px; }
+.nav { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+button { font: inherit; color: var(--ink); background: var(--btn); border: 1px solid var(--ring); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+button:hover { background: var(--btn-hover); }
+button:disabled { opacity: .45; cursor: default; }
+.card { background: var(--card); border: 1px solid var(--ring); border-radius: 14px; padding: 16px; }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 14px; }
+.kpi .v { font-size: 30px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+.kpi .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tintero { background: var(--warn-bg); border-color: transparent; margin-bottom: 14px; }
+.tintero h2 { color: var(--warn-ink); }
+.fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 0; border-top: 1px solid var(--ring); }
+.fila:first-of-type { border-top: 0; }
+.fila .t { flex: 1 1 260px; min-width: 0; }
+.fila .t b { font-variant-numeric: tabular-nums; }
+.fila .m { color: var(--ink-2); font-size: 13px; }
+.acc { display: flex; gap: 6px; flex-wrap: wrap; }
+.acc button { padding: 4px 9px; font-size: 13px; }
+.acc input[type=date] { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--ring); background: var(--card); color: var(--ink); }
+.dos { grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
+.semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.dia { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 8px; min-height: 120px; }
+.dia.hoy { background: var(--hoy); border-color: var(--tarea); }
+.dia .n { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; }
+.it { font-size: 12.5px; padding: 4px 6px 4px 8px; border-radius: 6px; margin-bottom: 4px; background: var(--card); border-left: 3px solid var(--c, var(--axis)); overflow-wrap: anywhere; }
+.it.hecho { color: var(--muted); text-decoration: line-through; }
+.it .h { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 10px; }
+.leyenda span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); font-size: 12.5px; padding: 5px 8px; border-radius: 6px; width: max-content; max-width: 240px; transform: translate(-50%, -110%); opacity: 0; transition: opacity .1s; }
+details { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+table { border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
+td, th { padding: 2px 10px 2px 0; text-align: left; }
+ul.lista { list-style: none; padding: 0; margin: 0; }
+ul.lista li { padding: 6px 0; border-top: 1px solid var(--ring); font-size: 14px; }
+ul.lista li:first-child { border-top: 0; }
+.chip { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 99px; background: var(--btn); color: var(--ink-2); margin-left: 6px; }
+.aviso { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); margin-bottom: 14px; font-size: 14px; }
+.vacio { color: var(--muted); font-size: 14px; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--page); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; max-width: calc(100% - 32px); }
+.toast.on { opacity: 1; }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dos { grid-template-columns: 1fr; }
+  .semana { grid-template-columns: 1fr; }
+  .dia { min-height: 0; }
+  .nav { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Mi semana</h1>
+      <div class="sub" id="rango">Cargando…</div>
+    </div>
+    <div class="nav">
+      <button id="ant" aria-label="Semana anterior">‹ Anterior</button>
+      <button id="act">Esta semana</button>
+      <button id="sig" aria-label="Semana siguiente">Siguiente ›</button>
+      <button id="tema" aria-label="Cambiar tema" title="Claro / oscuro">◐ Tema</button>
+    </div>
+  </header>
+  <div id="aviso"></div>
+
+  <section class="card tintero" aria-labelledby="t-tin">
+    <h2 id="t-tin">🫙 Quedó en el tintero <span class="chip" id="n-tin">0</span></h2>
+    <div id="tintero"></div>
+  </section>
+
+  <section class="grid kpis" id="kpis" aria-label="Rendimiento de la semana"></section>
+
+  <section class="card" style="margin-bottom:14px" aria-labelledby="t-ag">
+    <h2 id="t-ag">Agenda de la semana</h2>
+    <div class="semana" id="semana"></div>
+    <div class="leyenda">
+      <span style="--c:var(--evento)">📅 Evento</span>
+      <span style="--c:var(--recordatorio)">⏰ Recordatorio</span>
+      <span style="--c:var(--tarea)">✅ Tarea que vence</span>
+    </div>
+  </section>
+
+  <section class="grid dos">
+    <div class="card">
+      <h2>Tareas completadas por día</h2>
+      <div class="chart" id="g-dias"></div>
+      <details><summary>Ver como tabla</summary><table id="tb-dias"></table></details>
+    </div>
+    <div class="card">
+      <h2>Cumplimiento a tiempo · últimas 8 semanas</h2>
+      <div class="chart" id="g-sem"></div>
+      <details><summary>Ver como tabla</summary><table id="tb-sem"></table></details>
+    </div>
+  </section>
+
+  <section class="grid dos">
+    <div class="card">
+      <h2>✅ Tareas sin fecha <span class="chip" id="n-sf">0</span></h2>
+      <div id="sinfecha"></div>
+    </div>
+    <div class="card">
+      <h2>💡 Ideas recientes</h2>
+      <ul class="lista" id="ideas"></ul>
+      <h2 style="margin-top:16px">📚 Aprendizajes recientes</h2>
+      <ul class="lista" id="conoc"></ul>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const DEMO = params.has('demo');
+let semana = 0;
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const TIPO = { evento: ['📅', 'var(--evento)'], recordatorio: ['⏰', 'var(--recordatorio)'], tarea: ['✅', 'var(--tarea)'], revision: ['🤔', 'var(--axis)'] };
+
+try { const t = localStorage.getItem('tema'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+$('#tema').onclick = () => {
+  const oscuro = matchMedia('(prefers-color-scheme: dark)').matches;
+  const actual = document.documentElement.dataset.theme || (oscuro ? 'dark' : 'light');
+  const nuevo = actual === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = nuevo;
+  try { localStorage.setItem('tema', nuevo); } catch (e) {}
+};
+
+function toast(t) {
+  const el = $('#toast'); el.innerHTML = t; el.classList.add('on');
+  clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2600);
+}
+
+/* ---------- Datos ---------- */
+async function cargar() {
+  if (DEMO) return datosDemo(semana);
+  const r = await fetch(`api/panel?semana=${semana}`, { cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function accion(codigo, accion, valor) {
+  if (DEMO) { toast('Modo demostración: en tu panel real esto actualiza la base de datos.'); return; }
+  const r = await fetch('api/accion', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ codigo, accion, valor }) });
+  const j = await r.json().catch(() => ({}));
+  toast(j.texto || (r.ok ? 'Listo' : 'No se pudo'));
+  render();
+}
+
+/* ---------- Render ---------- */
+async function render() {
+  let d;
+  try { d = await cargar(); $('#aviso').innerHTML = ''; }
+  catch (e) {
+    $('#aviso').innerHTML = `<div class="aviso">No pude conectar con n8n (${esc(e.message)}). ¿Está corriendo <code>docker compose up</code>? · <a href="?demo">Ver con datos de ejemplo</a></div>`;
+    return;
+  }
+  const m = d.metricas;
+  const f = s => new Date(s + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
+  $('#rango').textContent = `${f(m.inicio)} – ${f(m.fin)}${DEMO ? ' · datos de ejemplo' : ''} · actualizado ${d.generado.slice(11)}`;
+  $('#sig').disabled = semana >= 1;
+
+  // Tintero (lo más importante: está arriba)
+  const tin = d.tintero || [];
+  $('#n-tin').textContent = tin.length;
+  $('#tintero').innerHTML = tin.length ? tin.map(x => `
+    <div class="fila">
+      <div class="t">${TIPO[x.tipo] ? TIPO[x.tipo][0] : '•'} <b>${esc(x.codigo)}</b> ${esc(x.titulo)}
+        <div class="m">${esc(x.motivo)}${x.fecha ? ' · ' + f(x.fecha) : ''}${x.dias > 0 && x.motivo === 'vencida' ? ` · hace ${x.dias} ${x.dias === 1 ? 'día' : 'días'}` : ''}</div></div>
+      <div class="acc">${botones(x)}</div>
+    </div>`).join('') : '<div class="vacio">Nada pendiente del pasado. Vas al día 🙌</div>';
+
+  // KPIs
+  const cumpl = m.tareas_con_plazo ? Math.round(100 * m.tareas_a_tiempo / m.tareas_con_plazo) + '%' : '—';
+  const kpi = (v, l, det) => `<div class="card kpi"><div class="v">${v}</div><div class="l">${l}</div><div class="d">${det}</div></div>`;
+  $('#kpis').innerHTML = [
+    kpi(m.tareas_completadas, 'Tareas completadas', `${m.tareas_creadas} nuevas esta semana`),
+    kpi(cumpl, 'Cumplidas a tiempo', m.tareas_con_plazo ? `${m.tareas_a_tiempo} de ${m.tareas_con_plazo} con plazo` : 'sin tareas con plazo aún'),
+    kpi(`${m.recordatorios_confirmados}/${m.recordatorios_enviados}`, 'Recordatorios confirmados', 'avisos que marcaste como hechos'),
+    kpi(`${m.eventos_realizados}/${m.eventos}`, 'Eventos realizados', 'compromisos de la agenda'),
+    kpi(m.capturas, 'Capturas', `${m.ideas} ideas · ${m.conocimientos} aprendizajes · ${m.reprogramaciones} reprogramaciones`),
+  ].join('');
+
+  // Agenda
+  $('#semana').innerHTML = d.por_dia.map(dia => `
+    <div class="dia${dia.fecha === d.hoy ? ' hoy' : ''}">
+      <div class="n"><span>${esc(dia.dia)}${dia.fecha === d.hoy ? ' · hoy' : ''}</span><span class="sub">${dia.completadas ? '✓' + dia.completadas : ''}</span></div>
+      ${dia.items.length ? dia.items.map(it => {
+        const hecho = ['completada', 'realizado', 'confirmado'].includes(it.estado);
+        return `<div class="it${hecho ? ' hecho' : ''}" style="--c:${TIPO[it.tipo][1]}" title="${esc(it.codigo)} · ${esc(it.estado)}">
+          ${TIPO[it.tipo][0]} ${it.hora ? `<span class="h">${esc(it.hora)}</span> ` : ''}${esc(it.titulo)}${it.prioridad === 'alta' ? ' ‼️' : ''}</div>`;
+      }).join('') : '<div class="vacio" style="font-size:12.5px">—</div>'}
+    </div>`).join('');
+
+  // Gráficos
+  barras('#g-dias', d.por_dia.map(x => ({ etq: x.dia.slice(0, 3), det: x.dia, v: x.completadas })), 'completadas');
+  tabla('#tb-dias', ['Día', 'Completadas', 'Capturas'], d.por_dia.map(x => [x.dia, x.completadas, x.capturas]));
+  linea('#g-sem', d.tendencia.map(x => ({ etq: f(x.inicio), v: x.cumplimiento, c: x.completadas, n: x.creadas })));
+  tabla('#tb-sem', ['Semana', 'Cumplimiento', 'Completadas', 'Creadas'], d.tendencia.map(x => [f(x.inicio), x.cumplimiento == null ? '—' : x.cumplimiento + '%', x.completadas, x.creadas]));
+
+  // Sin fecha
+  const sf = d.sin_fecha || [];
+  $('#n-sf').textContent = sf.length;
+  $('#sinfecha').innerHTML = sf.length ? sf.slice(0, 12).map(x => `
+    <div class="fila"><div class="t"><b>${esc(x.codigo)}</b> ${esc(x.titulo)}${x.prioridad === 'alta' ? ' ‼️' : ''}
+      ${x.proyecto ? `<span class="chip">${esc(x.proyecto)}</span>` : ''}</div>
+      <div class="acc">${botones({ codigo: x.codigo, tipo: 'tarea' }, 'Darle fecha')}</div></div>`).join('')
+    : '<div class="vacio">Todas tus tareas tienen fecha.</div>';
+
+  $('#ideas').innerHTML = (d.ideas || []).map(x => `<li><b>${esc(x.codigo)}</b> ${esc(x.titulo)}<span class="chip">${esc(x.estado)}</span></li>`).join('') || '<li class="vacio">Sin ideas todavía.</li>';
+  $('#conoc').innerHTML = (d.conocimientos || []).map(x => `<li><b>${esc(x.codigo)}</b> ${esc(x.titulo)}${x.area ? `<span class="chip">${esc(x.area)}</span>` : ''}</li>`).join('') || '<li class="vacio">Sin aprendizajes todavía.</li>';
+}
+
+function botones(x, etqHoy) {
+  const c = esc(x.codigo);
+  if (x.tipo === 'evento') return `<button data-a="hecho" data-c="${c}">✅ Se hizo</button><button data-a="no" data-c="${c}">❌ No se hizo</button>`;
+  if (x.tipo === 'revision') return '<span class="m">Resuélvelo en Telegram con /revision</span>';
+  const hecho = `<button data-a="hecho" data-c="${c}">✅ Hecho</button>`;
+  return (etqHoy ? '' : hecho) + `<button data-a="reprogramar" data-v="hoy" data-c="${c}">Hoy</button>
+    <button data-a="reprogramar" data-v="mañana" data-c="${c}">Mañana</button>
+    <button data-a="reprogramar" data-v="lunes" data-c="${c}">Lunes</button>
+    <input type="date" data-c="${c}" aria-label="Elegir fecha para ${c}">` + (etqHoy ? hecho : '');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]');
+  if (b) accion(b.dataset.c, b.dataset.a, b.dataset.v);
+});
+document.addEventListener('change', e => {
+  if (e.target.matches('input[type=date][data-c]') && e.target.value) accion(e.target.dataset.c, 'reprogramar', e.target.value);
+});
+
+/* ---------- Gráficos SVG (una serie cada uno, sin doble eje) ---------- */
+function marco(sel, W, H) {
+  const el = $(sel);
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"></svg><div class="tip"></div>`;
+  return { svg: el.querySelector('svg'), tip: el.querySelector('.tip'), el };
+}
+function escalaMax(v) { const m = Math.max(1, ...v); const p = m <= 4 ? 1 : m <= 10 ? 2 : 5; return Math.ceil(m / p) * p; }
+function mostrarTip(t, el, x, y, html) {
+  const svg = el.querySelector('svg'), s = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  t.innerHTML = html;
+  const mitad = t.offsetWidth / 2;
+  const px = Math.max(mitad, Math.min(s.width - mitad, x * s.width / vb.width));
+  t.style.left = px + 'px'; t.style.top = (y * s.height / vb.height) + 'px'; t.style.opacity = 1;
+}
+function barras(sel, datos, unidad) {
+  const W = 520, H = 210, L = 28, B = 26, T = 14, R = 6;
+  const { svg, tip, el } = marco(sel, W, H);
+  const max = escalaMax(datos.map(d => d.v));
+  const ih = H - B - T, iw = W - L - R, bw = iw / datos.length;
+  const y = v => T + ih - (v / max) * ih;
+  let s = '';
+  for (let k = 0; k <= max; k += Math.max(1, Math.round(max / 4))) {
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(k)}" y2="${y(k)}" stroke="var(--grid)" stroke-width="1"/>
+          <text x="${L - 6}" y="${y(k) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${k}</text>`;
+  }
+  datos.forEach((d, i) => {
+    const x = L + i * bw + bw * 0.22, w = bw * 0.56, h = (d.v / max) * ih;
+    if (h > 0) s += `<path d="M${x},${T + ih} v${-(h - 4)} q0,-4 4,-4 h${w - 8} q4,0 4,4 v${h - 4} z" fill="var(--bar)"/>`;
+    s += `<text x="${x + w / 2}" y="${H - 8}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${esc(d.etq)}</text>
+          <rect x="${L + i * bw}" y="${T}" width="${bw}" height="${ih}" fill="transparent" data-i="${i}"/>`;
+  });
+  s += `<line x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}" stroke="var(--axis)"/>`;
+  svg.innerHTML = s;
+  svg.setAttribute('aria-label', 'Tareas completadas por día: ' + datos.map(d => `${d.det} ${d.v}`).join(', '));
+  svg.querySelectorAll('rect[data-i]').forEach(r => {
+    r.addEventListener('mouseenter', () => { const d = datos[r.dataset.i]; mostrarTip(tip, el, +r.getAttribute('x') + bw / 2, y(d.v), `${esc(d.det)}: <b>${d.v}</b> ${unidad}`); });
+    r.addEventListener('mouseleave', () => tip.style.opacity = 0);
+  });
+}
+function linea(sel, datos) {
+  const W = 520, H = 210, L = 38, B = 26, T = 14, R = 14;
+  const { svg, tip, el } = marco(sel, W, H);
+  const ih = H - B - T, iw = W - L - R, paso = iw / Math.max(1, datos.length - 1);
+  const X = i => L + i * paso, Y = v => T + ih - (v / 100) * ih;
+  let s = '';
+  [0, 25, 50, 75, 100].forEach(k => s += `<line x1="${L}" x2="${W - R}" y1="${Y(k)}" y2="${Y(k)}" stroke="var(--grid)"/>
+    <text x="${L - 6}" y="${Y(k) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${k}%</text>`);
+  // segmentos solo entre semanas con dato (una semana sin tareas con plazo no es 0%)
+  let tramo = [];
+  const cerrar = () => { if (tramo.length > 1) s += `<polyline points="${tramo.join(' ')}" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; tramo = []; };
+  datos.forEach((d, i) => { if (d.v == null) cerrar(); else tramo.push(`${X(i)},${Y(d.v)}`); });
+  cerrar();
+  datos.forEach((d, i) => {
+    if (d.v != null) s += `<circle cx="${X(i)}" cy="${Y(d.v)}" r="4.5" fill="var(--line)" stroke="var(--card)" stroke-width="2"/>`;
+    if (i % 2 === datos.length % 2 || i === datos.length - 1) s += `<text x="${X(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(d.etq)}</text>`;
+  });
+  const ult = datos[datos.length - 1];
+  if (ult && ult.v != null) s += `<text x="${X(datos.length - 1) - 8}" y="${Y(ult.v) - 10}" text-anchor="end" font-size="12" font-weight="600" fill="var(--ink)">${ult.v}%</text>`;
+  s += `<line class="cruz" x1="0" x2="0" y1="${T}" y2="${T + ih}" stroke="var(--axis)" opacity="0"/>
+        <rect x="${L - paso / 2}" y="${T}" width="${iw + paso}" height="${ih}" fill="transparent" class="zona"/>`;
+  svg.innerHTML = s;
+  svg.setAttribute('aria-label', 'Cumplimiento a tiempo por semana: ' + datos.map(d => `${d.etq} ${d.v == null ? 'sin datos' : d.v + '%'}`).join(', '));
+  const cruz = svg.querySelector('.cruz'), zona = svg.querySelector('.zona');
+  zona.addEventListener('mousemove', ev => {
+    const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const i = Math.max(0, Math.min(datos.length - 1, Math.round((q.x - L) / paso)));
+    const d = datos[i];
+    cruz.setAttribute('x1', X(i)); cruz.setAttribute('x2', X(i)); cruz.setAttribute('opacity', 1);
+    mostrarTip(tip, el, X(i), d.v == null ? T + ih / 2 : Y(d.v),
+      `Semana del ${esc(d.etq)}: <b>${d.v == null ? 'sin tareas con plazo' : d.v + '%'}</b> · ${d.c} completadas de ${d.n} creadas`);
+  });
+  zona.addEventListener('mouseleave', () => { tip.style.opacity = 0; cruz.setAttribute('opacity', 0); });
+}
+function tabla(sel, cab, filas) {
+  $(sel).innerHTML = `<tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr>` + filas.map(f => `<tr>${f.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+}
+
+/* ---------- Datos de ejemplo (?demo) ---------- */
+function datosDemo(off) {
+  const iso = d => d.toISOString().slice(0, 10);
+  const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+  const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7) + off * 7);
+  const dia = i => { const d = new Date(lunes); d.setDate(lunes.getDate() + i); return d; };
+  const nombre = d => ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+  const items = [
+    [{ codigo: 'E14', tipo: 'evento', titulo: 'Reunión con el contador', hora: '11:00', estado: 'realizado' }, { codigo: 'T31', tipo: 'tarea', titulo: 'Enviar boletas de octubre', estado: 'completada' }],
+    [{ codigo: 'R22', tipo: 'recordatorio', titulo: 'Retirar documento en notaría', hora: '09:30', estado: 'confirmado' }, { codigo: 'T29', tipo: 'tarea', titulo: 'Cotizar materiales para cabañas', estado: 'pendiente', prioridad: 'alta' }],
+    [{ codigo: 'E15', tipo: 'evento', titulo: 'Capacitación Airbnb', hora: '15:00', estado: 'agendado' }],
+    [{ codigo: 'R23', tipo: 'recordatorio', titulo: 'Llamar al dentista', hora: '10:00', estado: 'programado' }, { codigo: 'T33', tipo: 'tarea', titulo: 'Revisar propuesta comercial', estado: 'pendiente' }],
+    [{ codigo: 'T34', tipo: 'tarea', titulo: 'Comprar tornillos y barniz', estado: 'pendiente' }],
+    [{ codigo: 'E16', tipo: 'evento', titulo: 'Cumpleaños de la Cata', hora: null, estado: 'agendado' }],
+    [],
+  ];
+  const comp = [3, 1, 2, 0, 0, 0, 0];
+  const g = new Date();
+  return {
+    generado: iso(g) + 'T' + g.toTimeString().slice(0, 5), hoy: iso(hoy), offset: off,
+    metricas: { inicio: iso(dia(0)), fin: iso(dia(6)), tareas_completadas: 6, tareas_creadas: 9, tareas_con_plazo: 5, tareas_a_tiempo: 3, reprogramaciones: 4,
+      recordatorios_enviados: 5, recordatorios_confirmados: 4, eventos: 3, eventos_realizados: 1, capturas: 14, ideas: 3, conocimientos: 2 },
+    por_dia: items.map((it, i) => ({ fecha: iso(dia(i)), dia: nombre(dia(i)), completadas: comp[i], capturas: [3, 4, 2, 3, 1, 1, 0][i], items: it })),
+    tintero: [
+      { codigo: 'T27', tipo: 'tarea', titulo: 'Pagar patente municipal', fecha: iso(dia(-3)), motivo: 'vencida', dias: 5 },
+      { codigo: 'E12', tipo: 'evento', titulo: 'Visita técnica caldera', fecha: iso(dia(-2)), motivo: '¿se realizó?', dias: 4 },
+      { codigo: 'R19', tipo: 'recordatorio', titulo: 'Sacar la basura reciclable', fecha: iso(dia(0)), motivo: 'avisado y sin confirmar', dias: 1 },
+      { codigo: 'T18', tipo: 'tarea', titulo: 'Investigar proveedores de leña', fecha: null, motivo: 'sin fecha hace 9 días', dias: 9 },
+      { codigo: 'V4', tipo: 'revision', titulo: 'Algo sobre la reserva de diciembre', fecha: iso(dia(0)), motivo: 'esperando clasificación', dias: 0 },
+    ],
+    sin_fecha: [
+      { codigo: 'T18', titulo: 'Investigar proveedores de leña', proyecto: 'cabañas', prioridad: null },
+      { codigo: 'T25', titulo: 'Ordenar carpeta de facturas', proyecto: null, prioridad: null },
+      { codigo: 'T30', titulo: 'Actualizar fotos del alojamiento', proyecto: 'cabañas', prioridad: 'alta' },
+    ],
+    tendencia: [40, 55, null, 50, 62, 58, 70, 60].map((v, i) => ({ inicio: iso(dia((i - 7) * 7)), cumplimiento: v, completadas: [3, 4, 1, 4, 5, 6, 7, 6][i], creadas: [6, 7, 2, 8, 7, 9, 8, 9][i] })),
+    ideas: [{ codigo: 'I9', titulo: 'Tours de observación de estrellas', estado: 'en exploración' }, { codigo: 'I8', titulo: 'Objetos decorativos de madera reciclada', estado: 'nueva' }, { codigo: 'I7', titulo: 'Podcast sobre turismo rural', estado: 'nueva' }],
+    conocimientos: [{ codigo: 'C5', titulo: 'Cómo funcionan los webhooks', area: 'tecnología' }, { codigo: 'C4', titulo: 'Arquitectura modular', area: 'software' }],
+    revision: 1,
+  };
+}
+
+$('#ant').onclick = () => { semana--; render(); };
+$('#act').onclick = () => { semana = 0; render(); };
+$('#sig').onclick = () => { semana++; render(); };
+render();
+setInterval(() => { if (!document.hidden) render(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+{
+  "id": "asistTdahPanel01",
+  "name": "Asistente TDAH · 3 API del panel semanal",
+  "active": false,
+  "nodes": [
+    {
+      "id": "0c7edb57-79ef-4c0e-a6d6-f6222a867801",
+      "name": "Nota · Panel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -300
+      ],
+      "parameters": {
+        "content": "## 📈 Panel semanal\nGET /webhook/panel?semana=0 devuelve los datos de la semana.\nPOST /webhook/panel-accion permite completar o reprogramar desde el panel.\nAmbos exigen la cabecera X-Panel-Token (la agrega nginx).",
+        "width": 460,
+        "height": 200,
+        "color": 4
+      }
+    },
+    {
+      "id": "c8c0ee0d-a40f-4b6a-a672-3c909892ef3a",
+      "name": "GET /panel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "panel",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "cde48224-f93c-40e3-af5a-0ce4182b076b"
+    },
+    {
+      "id": "67a5791c-7557-4851-ae91-c278d51b0a17",
+      "name": "Token válido (GET)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fb0414ae-7f7d-4787-a22a-9022d304f39f",
+              "leftValue": "={{ $json.headers['x-panel-token'] && $json.headers['x-panel-token'] === $env.PANEL_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ed3a6ebe-3972-4bca-aaf0-826e47c02e6c",
+      "name": "Datos del panel",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        -80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT panel_semanal($1::int) AS r",
+        "options": {
+          "queryReplacement": "={{ [ Math.max(-52, Math.min(4, parseInt($json.query.semana || '0', 10) || 0)) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "c78016c5-34bf-48b0-a85b-fac6c7e06467",
+      "name": "Responder panel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -80
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.r) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "5aee4858-62af-4562-a021-fc32b36b78f1",
+      "name": "No autorizado (GET)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"no autorizado\" }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c677e55c-d7a3-49a1-a7a2-9620c8ad36f9",
+      "name": "POST /panel-accion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        360
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "panel-accion",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "38333630-f023-4d86-a7dc-fae6f8d723c9"
+    },
+    {
+      "id": "13424d5f-4487-4d38-a1ff-28787b9c3493",
+      "name": "Token válido (POST)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        360
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e5cb114c-c26f-4287-a68b-759fb6d58cbe",
+              "leftValue": "={{ $json.headers['x-panel-token'] && $json.headers['x-panel-token'] === $env.PANEL_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "46469765-0006-4a77-af91-93aa54961b46",
+      "name": "Acción del panel",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        280
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT accion_panel($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json.body || {}) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "0cf9fbb6-8489-48f6-af0e-b2a2828be421",
+      "name": "Responder acción",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        280
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.r) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "36262dab-e602-402b-a303-4f87227b8b51",
+      "name": "No autorizado (POST)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        460
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"no autorizado\" }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "GET /panel": {
+      "main": [
+        [
+          {
+            "node": "Token válido (GET)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token válido (GET)": {
+      "main": [
+        [
+          {
+            "node": "Datos del panel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No autorizado (GET)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del panel": {
+      "main": [
+        [
+          {
+            "node": "Responder panel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /panel-accion": {
+      "main": [
+        [
+          {
+            "node": "Token válido (POST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token válido (POST)": {
+      "main": [
+        [
+          {
+            "node": "Acción del panel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No autorizado (POST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acción del panel": {
+      "main": [
+        [
+          {
+            "node": "Responder acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

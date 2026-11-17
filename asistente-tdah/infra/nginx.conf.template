@@ -1,0 +1,16 @@
+# Sirve el panel y reenvía /api a los webhooks de n8n agregando el token (el navegador nunca lo ve).
+server {
+  listen 80;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  location = /api/panel {
+    proxy_pass http://n8n:5678/webhook/panel$is_args$args;
+    proxy_set_header X-Panel-Token "${PANEL_TOKEN}";
+  }
+  location = /api/accion {
+    proxy_pass http://n8n:5678/webhook/panel-accion;
+    proxy_set_header X-Panel-Token "${PANEL_TOKEN}";
+    proxy_set_header Content-Type application/json;
+  }
+}

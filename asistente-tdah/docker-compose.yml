@@ -1,0 +1,116 @@
+# Asistente TDAH · todo corre en tu computador (Ollama y Whisper locales).
+# Primer arranque:  cp .env.example .env  →  completa el .env  →  docker compose --profile tunel up -d
+name: asistente-tdah
+
+x-n8n: &n8n-base
+  image: n8nio/n8n:1.123.97
+  env_file: .env
+  environment:
+    GENERIC_TIMEZONE: ${ZONA_HORARIA:-America/Santiago}
+    TZ: ${ZONA_HORARIA:-America/Santiago}
+    WEBHOOK_URL: https://${NGROK_DOMAIN}/
+    N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    N8N_RUNNERS_ENABLED: "false"
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"
+    N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    EXECUTIONS_DATA_PRUNE: "true"
+    EXECUTIONS_DATA_MAX_AGE: "336"
+    OLLAMA_URL: http://ollama:11434
+    WHISPER_URL: http://whisper:9000
+  volumes:
+    - n8n_data:/home/node/.n8n
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: asistente
+      POSTGRES_USER: ${POSTGRES_USER:-asistente}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+      TZ: ${ZONA_HORARIA:-America/Santiago}
+      ZONA_HORARIA: ${ZONA_HORARIA:-America/Santiago}
+      PANEL_URL: ${PANEL_URL:-http://localhost:8080}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro    # crea tablas y funciones la primera vez
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d asistente"]
+      interval: 5s
+      retries: 20
+
+  ollama:
+    image: ollama/ollama:0.40.16
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Con GPU NVIDIA, descomenta:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  ollama-modelo:   # descarga el modelo una vez y termina
+    image: ollama/ollama:0.40.16
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 3; ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"]
+    restart: "no"
+
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:v1.10.0
+    restart: unless-stopped
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: ${WHISPER_MODELO:-small}
+    volumes:
+      - whisper_cache:/root/.cache
+
+  n8n-importar:    # carga credenciales y workflows (los workflows solo la primera vez)
+    <<: *n8n-base
+    entrypoint: ["/bin/sh", "/init/n8n-init.sh"]
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n:/workflows:ro
+      - ./infra:/init:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  n8n:
+    <<: *n8n-base
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    depends_on:
+      n8n-importar: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+
+  panel:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      PANEL_TOKEN: ${PANEL_TOKEN:?Falta PANEL_TOKEN en .env}
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./infra/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on: [n8n]
+
+  tunel:           # Telegram exige HTTPS público para el webhook: ngrok con dominio fijo gratuito
+    image: ngrok/ngrok:3-alpine
+    profiles: [tunel]
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Falta NGROK_AUTHTOKEN en .env}
+    command: ["http", "--url=${NGROK_DOMAIN}", "n8n:5678"]
+    depends_on: [n8n]
+
+volumes:
+  pg_data:
+  n8n_data:
+  ollama_data:
+  whisper_cache:

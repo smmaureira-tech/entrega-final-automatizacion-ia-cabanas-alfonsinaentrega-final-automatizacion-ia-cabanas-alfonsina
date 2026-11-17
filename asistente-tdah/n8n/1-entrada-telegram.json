@@ -1,0 +1,1622 @@
+{
+  "id": "asistTdahEntrada",
+  "name": "Asistente TDAH · 1 Entrada Telegram y clasificación",
+  "active": false,
+  "nodes": [
+    {
+      "id": "49396246-2c12-4646-a22b-002202ef8e93",
+      "name": "Nota · Cómo funciona",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -460
+      ],
+      "parameters": {
+        "content": "## 🧠 Entrada y clasificación\n1. Llega un audio, texto, comando o botón desde Telegram.\n2. Audio → Whisper local → texto.\n3. Ollama local clasifica en 6 categorías y devuelve JSON.\n4. **Validar JSON** revisa estructura, fechas y reglas antes de distribuir.\n5. **Distribuir por categoría** (Switch) envía cada registro a su destino.\n6. Al final se envía UNA confirmación con lo creado y dónde quedó.",
+        "width": 520,
+        "height": 260,
+        "color": 4
+      }
+    },
+    {
+      "id": "45971e84-f2ef-499b-a3a9-53a874d8629c",
+      "name": "Nota · Orden",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        700
+      ],
+      "parameters": {
+        "content": "**Importante:** este workflow usa el orden de ejecución v1. La rama del Switch (arriba) termina completa antes de que corra \"Una sola vez\" (abajo), por eso la confirmación ve todos los registros.",
+        "width": 420,
+        "height": 160,
+        "color": 3
+      }
+    },
+    {
+      "id": "5b469351-1df6-4c8a-aba8-8f127177aa36",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "webhookId": "906f5fd8-5d70-4d43-aa3d-83fd394a4be8",
+      "credentials": {
+        "telegramApi": {
+          "id": "asistTelegram001",
+          "name": "Telegram Asistente"
+        }
+      }
+    },
+    {
+      "id": "41e6a21f-b8cd-4c32-a61d-09a6ef2099c3",
+      "name": "Clasificar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Clasificar entrada\": decide qué llegó desde Telegram y si el remitente está autorizado.\nconst u = $input.first().json;\nconst msg = u.message || u.edited_message || null;\nconst cb = u.callback_query || null;\nconst chat = msg ? msg.chat.id : (cb ? cb.message.chat.id : null);\nconst permitido = String($env.TELEGRAM_CHAT_ID || '').trim();\n\nconst base = { chat_id: chat, tipo: 'ignorar', texto: '', file_id: null, reply_to: null, callback_id: null, callback_data: null };\nif (!chat) return [{ json: base }];\n\n// Sin chat configurado: se responde con el id para completar el .env (primer uso).\nif (!permitido) return [{ json: { ...base, tipo: 'configurar' } }];\n// Bot privado: a desconocidos no se les responde nada.\nif (String(chat) !== permitido) return [{ json: base }];\n\nif (cb) {\n  return [{ json: { ...base, tipo: 'boton', callback_id: cb.id, callback_data: cb.data } }];\n}\nconst audio = msg.voice || msg.audio || (msg.video_note ? msg.video_note : null);\nif (audio) {\n  return [{ json: { ...base, tipo: 'voz', file_id: audio.file_id } }];\n}\nconst texto = String(msg.text || msg.caption || '').trim();\nif (!texto) return [{ json: base }];\nif (texto.startsWith('/')) return [{ json: { ...base, tipo: 'comando', texto } }];\nreturn [{ json: { ...base, tipo: 'texto', texto, reply_to: msg.reply_to_message ? msg.reply_to_message.message_id : null } }];\n"
+      }
+    },
+    {
+      "id": "1e7cf40c-2613-4c5d-ae9a-4e6e80de0f86",
+      "name": "Tipo de entrada",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        280
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "282058cf-1cb0-44d3-ae00-04b9463588bf",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "voz",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "voz"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b1d6e18c-7d00-49f0-af12-a4eeaab80a85",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "texto",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "da692156-99fc-4f70-ab25-4c47c642564e",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "comando",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "comando"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "fdbe9ea1-179d-4ab2-aaea-b70d322ec6bf",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "boton",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "boton"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "05e77738-af56-4ae0-a0d8-541a4e04a5f5",
+                    "leftValue": "={{ $json.tipo }}",
+                    "rightValue": "configurar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "configurar"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a8cfe48a-8bed-47b3-a03b-d93ef5bc1838",
+      "name": "Telegram · ubicar audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $json.file_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "4c63a9ff-aba4-4cf2-ac8e-a44dd5773cac",
+      "name": "Telegram · descargar audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/file/bot{{ $env.TELEGRAM_BOT_TOKEN }}/{{ $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a85332ce-4f3a-4162-af07-5cfe2579af7b",
+      "name": "Whisper · transcribir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WHISPER_URL || 'http://whisper:9000' }}/asr?task=transcribe&language=es&output=json&encode=true&vad_filter=true",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "audio_file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2
+    },
+    {
+      "id": "5c2c5214-70f3-4d08-a583-bae402d70833",
+      "name": "Texto desde audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Texto desde audio\": toma la transcripción de Whisper.\nconst e = $('Clasificar entrada').first().json;\nconst t = String($input.first().json.text || '').trim();\nreturn [{ json: { chat_id: e.chat_id, origen: 'voz', texto: t || '(audio vacío o inaudible)' } }];\n"
+      }
+    },
+    {
+      "id": "feb93012-b2cc-416c-adb8-6eb270fe8712",
+      "name": "¿Responde a una pregunta?",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT preparar_aclaracion($1::bigint, $2::text) AS r",
+        "options": {
+          "queryReplacement": "={{ [ $json.reply_to, $json.texto ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "284103f2-1185-40e6-a775-bb1dd7f6d896",
+      "name": "Texto desde mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Texto desde mensaje\": si respondía a una pregunta de revisión, el texto ya viene combinado.\nconst e = $('Clasificar entrada').first().json;\nconst r = $input.first().json.r || {};\nreturn [{ json: { chat_id: e.chat_id, origen: r.origen || 'texto', texto: r.texto || e.texto, revision: r.revision || null } }];\n"
+      }
+    },
+    {
+      "id": "4d0cf462-40eb-4162-aaec-af1d3138c42d",
+      "name": "Preparar prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "/*\n * Lógica compartida del clasificador.\n * Este archivo se incrusta tal cual en los nodos Code de n8n (ver tools/build-workflows.js)\n * y también se prueba con Node (tests/test-validador.js). No usa dependencias externas.\n */\n\nconst CATEGORIAS = ['tarea', 'recordatorio', 'evento', 'idea', 'conocimiento', 'otros'];\nconst PRIORIDADES = ['alta', 'media', 'baja'];\nconst ESTADOS_TAREA = ['pendiente', 'en curso', 'completada'];\nconst ESTADOS_IDEA = ['nueva', 'en exploración', 'en desarrollo', 'descartada'];\nconst DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nconst UMBRAL_CONFIANZA = 0.6;\n\nconst pad2 = n => String(n).padStart(2, '0');\n\n/* ---------- Fechas en la zona horaria del usuario (sin librerías) ---------- */\n\nfunction ahoraEnZona(zona, base = new Date()) {\n  const f = new Intl.DateTimeFormat('en-CA', {\n    timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const p = Object.fromEntries(f.formatToParts(base).map(x => [x.type, x.value]));\n  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };\n}\n\nfunction sumarDias(fecha, n) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d + n));\n  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;\n}\n\nfunction diaSemana(fecha) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  return DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];\n}\n\nfunction sumarMinutos(fecha, hora, minutos) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const [h, mi] = hora.split(':').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d, h, mi + minutos));\n  return {\n    fecha: `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`,\n    hora: `${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`,\n  };\n}\n\nfunction fechaValida(s) {\n  if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false;\n  const [y, m, d] = s.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;\n}\n\nfunction normalizarHora(s) {\n  if (typeof s !== 'string') return null;\n  const m = s.trim().match(/^(\\d{1,2})[:.h](\\d{2})?/i) || s.trim().match(/^(\\d{1,2})$/);\n  if (!m) return null;\n  const h = Number(m[1]), mi = Number(m[2] || 0);\n  if (h > 23 || mi > 59) return null;\n  return `${pad2(h)}:${pad2(mi)}`;\n}\n\n/* Calendario de referencia que se entrega al modelo: así no tiene que calcular fechas. */\nfunction calendarioReferencia(hoy) {\n  const filas = [];\n  for (let i = -7; i <= 21; i++) {\n    const f = sumarDias(hoy, i);\n    let etiqueta = '';\n    if (i === 0) etiqueta = ' (HOY)';\n    else if (i === 1) etiqueta = ' (mañana)';\n    else if (i === 2) etiqueta = ' (pasado mañana)';\n    else if (i === -1) etiqueta = ' (ayer)';\n    filas.push(`${diaSemana(f)} ${f}${etiqueta}`);\n  }\n  return filas.join('\\n');\n}\n\n/* ---------- Normalización ---------- */\n\nfunction sinTildes(s) {\n  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n}\n\nfunction normalizarCategoria(c) {\n  const s = sinTildes(c);\n  const mapa = {\n    tarea: 'tarea', tareas: 'tarea', task: 'tarea',\n    recordatorio: 'recordatorio', recordatorios: 'recordatorio', reminder: 'recordatorio',\n    evento: 'evento', eventos: 'evento', compromiso: 'evento', compromisos: 'evento', cita: 'evento',\n    idea: 'idea', ideas: 'idea',\n    conocimiento: 'conocimiento', conocimientos: 'conocimiento', aprendizaje: 'conocimiento',\n    otros: 'otros', otro: 'otros', 'otros temas': 'otros', archivo: 'otros',\n  };\n  return mapa[s] || null;\n}\n\nfunction normalizarEstadoIdea(e) {\n  const s = sinTildes(e);\n  if (s.startsWith('explor')) return 'en exploración';\n  if (s.startsWith('desarroll') || s === 'en desarrollo') return 'en desarrollo';\n  if (s.startsWith('descart')) return 'descartada';\n  return 'nueva';\n}\n\nfunction normalizarEstadoTarea(e) {\n  const s = sinTildes(e);\n  if (s.includes('curso') || s.includes('progreso')) return 'en curso';\n  if (s.startsWith('complet') || s === 'hecha' || s === 'terminada') return 'completada';\n  return 'pendiente';\n}\n\nfunction textoONull(v, max = 4000) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim();\n  if (!s || ['null', 'none', 'n/a', 'ninguno', 'ninguna', 'no especificado', 'no mencionado'].includes(s.toLowerCase())) return null;\n  return s.slice(0, max);\n}\n\nfunction listaTextos(v, max = 10) {\n  if (typeof v === 'string') v = v.split(/[,;]/);\n  if (!Array.isArray(v)) return [];\n  const vistos = new Set();\n  const out = [];\n  for (const x of v) {\n    const t = textoONull(x, 60);\n    if (!t) continue;\n    const k = t.toLowerCase().replace(/^#/, '');\n    if (vistos.has(k)) continue;\n    vistos.add(k);\n    out.push(k);\n    if (out.length >= max) break;\n  }\n  return out;\n}\n\n/* ---------- Lectura del JSON devuelto por Ollama ---------- */\n\nfunction parsearJSON(texto) {\n  if (texto && typeof texto === 'object') return { ok: true, valor: texto };\n  const s = String(texto || '').trim();\n  try { return { ok: true, valor: JSON.parse(s) }; } catch (e) { /* sigue */ }\n  // Modelos pequeños a veces envuelven el JSON en ```json ... ``` o texto extra.\n  const ini = s.indexOf('{'), fin = s.lastIndexOf('}');\n  if (ini >= 0 && fin > ini) {\n    try { return { ok: true, valor: JSON.parse(s.slice(ini, fin + 1)) }; } catch (e) { /* sigue */ }\n  }\n  return { ok: false, error: 'La respuesta del modelo no es un JSON válido' };\n}\n\n/* ---------- Validación de cada registro ---------- */\n\nconst PREGUNTA_CATEGORIA = '¿Dónde guardo esto? Elige una categoría.';\n\nfunction aRevision(r, motivo, pregunta, tipo) {\n  return {\n    categoria_destino: 'revision',\n    registro: Object.assign({}, r, {\n      motivo_revision: motivo,\n      pregunta: pregunta || r.pregunta || PREGUNTA_CATEGORIA,\n      tipo_revision: tipo, // 'categoria' (botones) o 'aclaracion' (responder con texto)\n    }),\n  };\n}\n\nfunction validarRegistro(bruto, ctx, opciones = {}) {\n  const errores = [];\n  const r0 = bruto && typeof bruto === 'object' ? bruto : {};\n  const categoriaOriginal = r0.categoria;\n  const categoria = normalizarCategoria(r0.categoria);\n  const contenido = textoONull(r0.contenido, 8000) || textoONull(r0.titulo, 8000) || '';\n  const r = {\n    categoria: categoria || 'otros',\n    titulo: (textoONull(r0.titulo, 140) || contenido.slice(0, 80) || 'Sin título'),\n    contenido,\n    fecha: fechaValida(r0.fecha) ? r0.fecha : null,\n    hora: normalizarHora(r0.hora),\n    hora_fin: normalizarHora(r0.hora_fin),\n    prioridad: PRIORIDADES.includes(sinTildes(r0.prioridad)) ? sinTildes(r0.prioridad) : null,\n    estado: null,\n    proyecto: textoONull(r0.proyecto, 120),\n    etiquetas: listaTextos(r0.etiquetas),\n    lugar: textoONull(r0.lugar, 200),\n    participantes: listaTextos(r0.participantes, 20),\n    fuente: textoONull(r0.fuente, 300),\n    area_tematica: textoONull(r0.area_tematica, 120),\n    aplicacion: textoONull(r0.aplicacion, 2000),\n    concepto_principal: textoONull(r0.concepto_principal, 500),\n    id_local: textoONull(r0.id_local, 20),\n    relacionado_con: textoONull(r0.relacionado_con, 20),\n    requiere_confirmacion: r0.requiere_confirmacion === true,\n    confianza: typeof r0.confianza === 'number' ? Math.max(0, Math.min(1, r0.confianza)) : null,\n    pregunta: textoONull(r0.pregunta, 300),\n  };\n  if (r0.fecha && !r.fecha) errores.push(`fecha inválida \"${r0.fecha}\" descartada`);\n  if (r0.hora && !r.hora) errores.push(`hora inválida \"${r0.hora}\" descartada`);\n\n  if (!categoria) {\n    return { ...aRevision(r, `Categoría no reconocida: \"${categoriaOriginal}\"`, null, 'categoria'), errores };\n  }\n  if (!contenido) {\n    return { ...aRevision(r, 'Registro sin contenido', '¿Qué querías guardar aquí?', 'aclaracion'), errores };\n  }\n\n  // Recordatorios relativos (\"en dos horas\"): el validador calcula la fecha exacta.\n  const despl = Number(r0.desplazamiento_minutos);\n  if (r.categoria === 'recordatorio' && Number.isFinite(despl) && despl > 0 && despl <= 60 * 24 * 60) {\n    const t = sumarMinutos(ctx.hoy, ctx.hora, Math.round(despl));\n    r.fecha = t.fecha;\n    r.hora = t.hora;\n  }\n\n  // Reclasificación manual: el usuario ya decidió la categoría, no se vuelve a dudar de ella.\n  if (!opciones.categoriaForzada) {\n    if (r.requiere_confirmacion) {\n      return { ...aRevision(r, 'El modelo pidió confirmación', r.pregunta, r.pregunta ? 'aclaracion' : 'categoria'), errores };\n    }\n    if (r.confianza !== null && r.confianza < UMBRAL_CONFIANZA) {\n      return { ...aRevision(r, `Confianza baja (${r.confianza})`, null, 'categoria'), errores };\n    }\n  }\n\n  switch (r.categoria) {\n    case 'tarea':\n      r.estado = normalizarEstadoTarea(r0.estado);\n      break;\n    case 'recordatorio':\n      if (!r.fecha || !r.hora) {\n        const falta = !r.fecha && !r.hora ? 'el día y la hora' : (!r.fecha ? 'el día' : 'la hora');\n        return { ...aRevision(r, 'Recordatorio sin fecha u hora clara',\n          `Para el recordatorio «${r.titulo}» me falta ${falta}. ¿Cuándo te aviso?`, 'aclaracion'), errores };\n      }\n      r.estado = 'programado';\n      break;\n    case 'evento':\n      if (!r.fecha) {\n        return { ...aRevision(r, 'Evento sin fecha',\n          `¿Qué día es «${r.titulo}»? (y la hora, si la sabes)`, 'aclaracion'), errores };\n      }\n      if (r.hora_fin && (!r.hora || r.hora_fin <= r.hora)) r.hora_fin = null;\n      r.estado = 'agendado';\n      break;\n    case 'idea':\n      r.estado = normalizarEstadoIdea(r0.estado);\n      r.prioridad = null;\n      break;\n    case 'conocimiento':\n      r.prioridad = null;\n      r.concepto_principal = r.concepto_principal || r.titulo;\n      break;\n    case 'otros':\n      r.prioridad = null;\n      break;\n  }\n  return { categoria_destino: r.categoria, registro: r, errores };\n}\n\n/* ---------- Validación de la salida completa ---------- */\n\nfunction validarSalida(respuesta, ctx) {\n  const leido = parsearJSON(respuesta);\n  const original = ctx.texto_original || '';\n  if (!leido.ok) {\n    // Nunca se pierde la información: va a revisión con la transcripción completa.\n    return {\n      valido: false,\n      errores: [leido.error],\n      transcripcion_original: original,\n      transcripcion_corregida: original,\n      resumen_general: original.slice(0, 200),\n      registros: [aRevision({ categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje', contenido: original, etiquetas: [] },\n        'El clasificador no devolvió un JSON válido', null, 'categoria')],\n      requiere_aclaracion: false,\n      pregunta_aclaracion: null,\n    };\n  }\n  const v = leido.valor || {};\n  const errores = [];\n  if (!Array.isArray(v.registros)) errores.push('Falta el arreglo \"registros\"');\n  const brutos = Array.isArray(v.registros) ? v.registros.slice(0, 15) : [];\n  const registros = [];\n  brutos.forEach((b, i) => {\n    const res = validarRegistro(b, ctx);\n    if (!res.registro.id_local) res.registro.id_local = `r${i + 1}`;\n    res.errores.forEach(e => errores.push(`registro ${i + 1}: ${e}`));\n    registros.push({ categoria_destino: res.categoria_destino, registro: res.registro });\n  });\n\n  const requiereAclaracion = v.requiere_aclaracion === true;\n  const pregunta = textoONull(v.pregunta_aclaracion, 300);\n\n  if (registros.length === 0) {\n    if (requiereAclaracion && pregunta) {\n      registros.push(aRevision({ categoria: 'otros', titulo: original.slice(0, 80), contenido: original, etiquetas: [] },\n        'El modelo necesita una aclaración', pregunta, 'aclaracion'));\n    } else {\n      // Regla: no descartar información que no se pudo clasificar.\n      registros.push({\n        categoria_destino: 'otros',\n        registro: {\n          categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje sin clasificar', contenido: textoONull(v.resumen_general) || original,\n          fecha: null, hora: null, etiquetas: [], area_tematica: null, id_local: 'r1', requiere_confirmacion: false,\n        },\n      });\n    }\n  }\n\n  return {\n    valido: errores.length === 0,\n    errores,\n    transcripcion_original: original, // siempre la real, nunca la reescrita por el modelo\n    transcripcion_corregida: textoONull(v.transcripcion_corregida, 20000) || original,\n    resumen_general: textoONull(v.resumen_general, 1000) || original.slice(0, 200),\n    registros,\n    requiere_aclaracion: requiereAclaracion,\n    pregunta_aclaracion: pregunta,\n  };\n}\n\n/* Esquema que se pasa a Ollama en \"format\" para forzar la estructura. */\nfunction esquemaSalida() {\n  const txt = { type: ['string', 'null'] };\n  return {\n    type: 'object',\n    properties: {\n      transcripcion_original: { type: 'string' },\n      transcripcion_corregida: { type: 'string' },\n      resumen_general: { type: 'string' },\n      registros: {\n        type: 'array',\n        items: {\n          type: 'object',\n          properties: {\n            id_local: { type: 'string' },\n            categoria: { type: 'string', enum: CATEGORIAS },\n            titulo: { type: 'string' },\n            contenido: { type: 'string' },\n            fecha: txt,\n            hora: txt,\n            hora_fin: txt,\n            desplazamiento_minutos: { type: ['integer', 'null'] },\n            prioridad: { type: ['string', 'null'], enum: ['alta', 'media', 'baja', null] },\n            estado: txt,\n            proyecto: txt,\n            lugar: txt,\n            participantes: { type: 'array', items: { type: 'string' } },\n            fuente: txt,\n            area_tematica: txt,\n            concepto_principal: txt,\n            aplicacion: txt,\n            etiquetas: { type: 'array', items: { type: 'string' } },\n            relacionado_con: txt,\n            confianza: { type: 'number' },\n            requiere_confirmacion: { type: 'boolean' },\n            pregunta: txt,\n          },\n          required: ['id_local', 'categoria', 'titulo', 'contenido', 'fecha', 'hora', 'prioridad', 'estado',\n            'proyecto', 'etiquetas', 'confianza', 'requiere_confirmacion'],\n        },\n      },\n      requiere_aclaracion: { type: 'boolean' },\n      pregunta_aclaracion: txt,\n    },\n    required: ['transcripcion_original', 'transcripcion_corregida', 'resumen_general', 'registros',\n      'requiere_aclaracion', 'pregunta_aclaracion'],\n  };\n}\n\n\nconst PROMPT_SISTEMA = \"Eres el clasificador de un asistente personal para una persona con TDAH. Recibes la transcripción de un audio (o un mensaje escrito) en español de Chile y debes ordenar su significado en registros. Respondes SOLO con JSON que siga el esquema indicado. No escribes nada fuera del JSON.\\n\\n## Las seis categorías (usa exactamente estos nombres)\\n\\n- \\\"tarea\\\": una acción concreta que la persona debe hacer ella misma, con o sin plazo. Ej.: \\\"tengo que cotizar materiales\\\", \\\"debo enviar el contrato\\\", \\\"comprar tornillos\\\", \\\"revisar la propuesta comercial\\\".\\n- \\\"recordatorio\\\": la persona pide EXPRESAMENTE que se le avise o recuerde algo (\\\"recuérdame\\\", \\\"avísame\\\", \\\"no me dejes olvidar\\\", \\\"no olvides que…\\\"). Lo que importa es el aviso en un momento dado.\\n- \\\"evento\\\": una actividad con día definido que ocupa un espacio en la agenda: reuniones, citas, cumpleaños, capacitaciones, viajes. \\\"El martes tengo reunión con el contador a las 11\\\".\\n- \\\"idea\\\": ocurrencias, proyectos posibles, oportunidades (\\\"podría…\\\", \\\"se me ocurre…\\\", \\\"quiero explorar…\\\", \\\"tengo una idea…\\\"). No es un compromiso.\\n- \\\"conocimiento\\\": algo que la persona aprendió, descubrió, una explicación, concepto o referencia (libro, podcast, autor) que quiere conservar.\\n- \\\"otros\\\": todo lo que no calza en las anteriores: comentarios personales, datos de referencia (un teléfono, una medida, una clave de wifi de la cabaña), información circunstancial.\\n\\n## Cómo distinguir (lo más importante)\\n\\n- Idea vs tarea: \\\"podría hacer una línea de muebles reciclados\\\" es idea. Solo si el audio dice una acción concreta (\\\"y mañana tengo que averiguar precios de pallets\\\") se crean DOS registros: la idea y la tarea, y la tarea lleva \\\"relacionado_con\\\" = id_local de la idea.\\n- Tarea vs recordatorio: \\\"tengo que llamar al dentista\\\" es tarea. \\\"Recuérdame mañana a las 10 llamar al dentista\\\" es recordatorio. Sin la petición expresa de aviso, es tarea.\\n- Evento vs tarea: un evento ocurre en un día (y a veces hora) y la persona asiste o participa. \\\"Tengo que preparar la presentación para la reunión del jueves\\\" = tarea (fecha límite jueves) + evento (la reunión del jueves), si la reunión se menciona como compromiso.\\n- Conocimiento vs tarea: \\\"aprendí cómo funcionan los webhooks\\\" es conocimiento. \\\"Quiero leer el libro X\\\" es conocimiento (referencia) salvo que diga una acción con plazo.\\n- Un mismo audio puede tener varias categorías. Cada acción, idea o dato independiente es un registro separado. Nunca juntes dos tareas distintas en un registro.\\n\\n## Reglas de datos\\n\\n1. NO inventes fechas, horas, lugares, fuentes, participantes, proyectos ni prioridades. Si no se dijeron, usa null (o [] en listas).\\n2. Para resolver fechas relativas (\\\"mañana\\\", \\\"el viernes\\\", \\\"el próximo martes\\\") usa SIEMPRE el CALENDARIO DE REFERENCIA del mensaje. \\\"El martes\\\" = el próximo martes a partir de hoy (si hoy es martes y no dice \\\"hoy\\\", es el de la próxima semana). Formato fecha: AAAA-MM-DD. Formato hora: HH:MM en 24 horas (\\\"a las 3 de la tarde\\\" = 15:00; \\\"a las 11\\\" en contexto laboral = 11:00).\\n3. Si el aviso es relativo (\\\"en dos horas\\\", \\\"en 20 minutos\\\"), pon \\\"desplazamiento_minutos\\\" (120, 20) y deja fecha y hora en null. El sistema calcula la hora exacta.\\n4. Si un recordatorio no tiene día u hora suficientemente claros (\\\"recuérdame llamar al dentista\\\"), pon requiere_confirmacion = true y en \\\"pregunta\\\" escribe una pregunta corta para aclararlo. No adivines la hora.\\n5. Si un evento no tiene día, pon requiere_confirmacion = true y pregunta el día. Un evento sin hora pero con día (un cumpleaños el sábado) es válido: hora = null.\\n6. Prioridad: solo \\\"alta\\\" si se expresa urgencia o importancia (\\\"urgente\\\", \\\"lo antes posible\\\", \\\"es clave\\\"), \\\"baja\\\" si se dice que no apura, \\\"media\\\" si se dice explícitamente. Si no se menciona nada, null.\\n7. Estado: tarea \\\"pendiente\\\" (o \\\"en curso\\\" si dice que ya empezó, \\\"completada\\\" si dice que ya lo hizo). Idea \\\"nueva\\\" salvo que diga que ya la está explorando o desarrollando.\\n8. Corrige errores evidentes del reconocimiento de voz (\\\"cabañas\\\" mal escrito, palabras partidas, muletillas) en \\\"transcripcion_corregida\\\", sin cambiar el significado. En \\\"transcripcion_original\\\" copia el texto recibido tal cual.\\n9. \\\"contenido\\\": redacta claro y ordenado, en tercera persona neutra o infinitivo. En ideas y conocimientos CONSERVA todo el detalle relevante (varias oraciones si hace falta); no lo reduzcas a una frase. Para conocimientos escribe una explicación estructurada (qué es, cómo funciona, por qué importa) solo con lo que se dijo.\\n10. \\\"titulo\\\": corto (máximo 8 palabras), empieza con verbo en tareas (\\\"Cotizar materiales para cabañas\\\").\\n11. \\\"etiquetas\\\": 1 a 4 palabras clave en minúscula, sin #.\\n12. \\\"proyecto\\\": solo si se nombra o es evidente por el contexto (por ejemplo \\\"cabañas\\\" si habla de las cabañas).\\n13. \\\"confianza\\\": de 0 a 1, qué tan segura es la categoría. Si dudas entre dos categorías, usa menos de 0.6 y pon requiere_confirmacion = true.\\n14. \\\"id_local\\\": \\\"r1\\\", \\\"r2\\\", … en orden.\\n15. Si TODO el mensaje es incomprensible, deja registros vacío, requiere_aclaracion = true y escribe pregunta_aclaracion.\\n16. \\\"resumen_general\\\": una o dos frases sobre el audio completo.\\n\\n## Campos según categoría\\n\\n- tarea: titulo, contenido (descripción), fecha (= fecha límite), prioridad, estado, proyecto, etiquetas.\\n- recordatorio: titulo, contenido (= mensaje que se enviará), fecha, hora o desplazamiento_minutos.\\n- evento: titulo (= nombre), contenido (descripción), fecha, hora (inicio), hora_fin, lugar, participantes.\\n- idea: titulo, contenido (descripción completa), area_tematica, proyecto, aplicacion (potencial aplicación), etiquetas, estado.\\n- conocimiento: titulo, concepto_principal, contenido (explicación estructurada), fuente, area_tematica, aplicacion (posibles aplicaciones), etiquetas.\\n- otros: titulo, contenido (resumen), area_tematica (= tema), etiquetas.\\n\\n## Ejemplo\\n\\nEntrada (hoy es lunes 2026-11-16): \\\"eh se me ocurrió que podríamos hacer tours de observación de estrellas en las cabañas, mañana tengo que averiguar cuánto sale un telescopio. Ah y el jueves a las 11 tengo reunión con el contador. Recuérdame en una hora sacar la ropa\\\"\\n\\nSalida:\\n{\\\"transcripcion_original\\\":\\\"eh se me ocurrió que podríamos hacer tours de observación de estrellas en las cabañas, mañana tengo que averiguar cuánto sale un telescopio. Ah y el jueves a las 11 tengo reunión con el contador. Recuérdame en una hora sacar la ropa\\\",\\\"transcripcion_corregida\\\":\\\"Se me ocurrió que podríamos hacer tours de observación de estrellas en las cabañas. Mañana tengo que averiguar cuánto sale un telescopio. El jueves a las 11 tengo reunión con el contador. Recuérdame en una hora sacar la ropa.\\\",\\\"resumen_general\\\":\\\"Una idea de astroturismo para las cabañas con una tarea asociada, una reunión con el contador y un recordatorio doméstico.\\\",\\\"registros\\\":[{\\\"id_local\\\":\\\"r1\\\",\\\"categoria\\\":\\\"idea\\\",\\\"titulo\\\":\\\"Tours de observación de estrellas\\\",\\\"contenido\\\":\\\"Ofrecer a los huéspedes de las cabañas tours nocturnos de observación de estrellas como experiencia turística adicional.\\\",\\\"fecha\\\":null,\\\"hora\\\":null,\\\"hora_fin\\\":null,\\\"desplazamiento_minutos\\\":null,\\\"prioridad\\\":null,\\\"estado\\\":\\\"nueva\\\",\\\"proyecto\\\":\\\"cabañas\\\",\\\"lugar\\\":null,\\\"participantes\\\":[],\\\"fuente\\\":null,\\\"area_tematica\\\":\\\"turismo\\\",\\\"concepto_principal\\\":null,\\\"aplicacion\\\":\\\"Nueva fuente de ingresos y diferenciación de las cabañas\\\",\\\"etiquetas\\\":[\\\"astroturismo\\\",\\\"experiencias\\\"],\\\"relacionado_con\\\":null,\\\"confianza\\\":0.95,\\\"requiere_confirmacion\\\":false,\\\"pregunta\\\":null},{\\\"id_local\\\":\\\"r2\\\",\\\"categoria\\\":\\\"tarea\\\",\\\"titulo\\\":\\\"Averiguar precio de un telescopio\\\",\\\"contenido\\\":\\\"Averiguar cuánto cuesta un telescopio para los tours de estrellas.\\\",\\\"fecha\\\":\\\"2026-11-17\\\",\\\"hora\\\":null,\\\"hora_fin\\\":null,\\\"desplazamiento_minutos\\\":null,\\\"prioridad\\\":null,\\\"estado\\\":\\\"pendiente\\\",\\\"proyecto\\\":\\\"cabañas\\\",\\\"lugar\\\":null,\\\"participantes\\\":[],\\\"fuente\\\":null,\\\"area_tematica\\\":null,\\\"concepto_principal\\\":null,\\\"aplicacion\\\":null,\\\"etiquetas\\\":[\\\"cotización\\\"],\\\"relacionado_con\\\":\\\"r1\\\",\\\"confianza\\\":0.9,\\\"requiere_confirmacion\\\":false,\\\"pregunta\\\":null},{\\\"id_local\\\":\\\"r3\\\",\\\"categoria\\\":\\\"evento\\\",\\\"titulo\\\":\\\"Reunión con el contador\\\",\\\"contenido\\\":\\\"Reunión con el contador.\\\",\\\"fecha\\\":\\\"2026-11-19\\\",\\\"hora\\\":\\\"11:00\\\",\\\"hora_fin\\\":null,\\\"desplazamiento_minutos\\\":null,\\\"prioridad\\\":null,\\\"estado\\\":null,\\\"proyecto\\\":null,\\\"lugar\\\":null,\\\"participantes\\\":[\\\"contador\\\"],\\\"fuente\\\":null,\\\"area_tematica\\\":null,\\\"concepto_principal\\\":null,\\\"aplicacion\\\":null,\\\"etiquetas\\\":[\\\"finanzas\\\"],\\\"relacionado_con\\\":null,\\\"confianza\\\":0.95,\\\"requiere_confirmacion\\\":false,\\\"pregunta\\\":null},{\\\"id_local\\\":\\\"r4\\\",\\\"categoria\\\":\\\"recordatorio\\\",\\\"titulo\\\":\\\"Sacar la ropa\\\",\\\"contenido\\\":\\\"Sacar la ropa.\\\",\\\"fecha\\\":null,\\\"hora\\\":null,\\\"hora_fin\\\":null,\\\"desplazamiento_minutos\\\":60,\\\"prioridad\\\":null,\\\"estado\\\":null,\\\"proyecto\\\":null,\\\"lugar\\\":null,\\\"participantes\\\":[],\\\"fuente\\\":null,\\\"area_tematica\\\":null,\\\"concepto_principal\\\":null,\\\"aplicacion\\\":null,\\\"etiquetas\\\":[\\\"casa\\\"],\\\"relacionado_con\\\":null,\\\"confianza\\\":0.95,\\\"requiere_confirmacion\\\":false,\\\"pregunta\\\":null}],\\\"requiere_aclaracion\\\":false,\\\"pregunta_aclaracion\\\":null}\\n\";\n// ---- nodo ----\n// Nodo \"Preparar prompt\": arma la llamada a Ollama con el calendario de referencia y el esquema JSON.\nconst zona = $env.GENERIC_TIMEZONE || 'America/Santiago';\nconst entrada = $input.first().json;\nconst ahora = ahoraEnZona(zona);\nconst ctx = { hoy: ahora.fecha, hora: ahora.hora, zona, texto_original: entrada.texto };\nconst usuario = [\n  `HOY: ${diaSemana(ahora.fecha)} ${ahora.fecha}, hora actual ${ahora.hora} (${zona}).`,\n  '',\n  'CALENDARIO DE REFERENCIA:',\n  calendarioReferencia(ahora.fecha),\n  '',\n  entrada.origen === 'voz' ? 'TRANSCRIPCIÓN DEL AUDIO:' : 'MENSAJE:',\n  entrada.texto,\n].join('\\n');\nconst ollama_body = {\n  model: $env.OLLAMA_MODEL || 'qwen2.5:7b',\n  stream: false,\n  format: esquemaSalida(),\n  options: { temperature: 0.1, num_ctx: 8192 },\n  keep_alive: '30m',\n  messages: [\n    { role: 'system', content: PROMPT_SISTEMA },\n    { role: 'user', content: usuario },\n  ],\n};\nreturn [{ json: { ...entrada, ctx, ollama_body } }];\n"
+      }
+    },
+    {
+      "id": "adebc6e0-f780-4e93-a6f5-97156d9ba4a2",
+      "name": "Telegram · escribiendo…",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendChatAction",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, action: 'typing' }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "79314f90-08b6-43eb-ad89-df7d487253fe",
+      "name": "Ollama · clasificar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OLLAMA_URL || 'http://ollama:11434' }}/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Preparar prompt').first().json.ollama_body) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "491ceea0-714a-47dc-aeec-cf2047c5e0e9",
+      "name": "Validar JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "/*\n * Lógica compartida del clasificador.\n * Este archivo se incrusta tal cual en los nodos Code de n8n (ver tools/build-workflows.js)\n * y también se prueba con Node (tests/test-validador.js). No usa dependencias externas.\n */\n\nconst CATEGORIAS = ['tarea', 'recordatorio', 'evento', 'idea', 'conocimiento', 'otros'];\nconst PRIORIDADES = ['alta', 'media', 'baja'];\nconst ESTADOS_TAREA = ['pendiente', 'en curso', 'completada'];\nconst ESTADOS_IDEA = ['nueva', 'en exploración', 'en desarrollo', 'descartada'];\nconst DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nconst UMBRAL_CONFIANZA = 0.6;\n\nconst pad2 = n => String(n).padStart(2, '0');\n\n/* ---------- Fechas en la zona horaria del usuario (sin librerías) ---------- */\n\nfunction ahoraEnZona(zona, base = new Date()) {\n  const f = new Intl.DateTimeFormat('en-CA', {\n    timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const p = Object.fromEntries(f.formatToParts(base).map(x => [x.type, x.value]));\n  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };\n}\n\nfunction sumarDias(fecha, n) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d + n));\n  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;\n}\n\nfunction diaSemana(fecha) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  return DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];\n}\n\nfunction sumarMinutos(fecha, hora, minutos) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const [h, mi] = hora.split(':').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d, h, mi + minutos));\n  return {\n    fecha: `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`,\n    hora: `${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`,\n  };\n}\n\nfunction fechaValida(s) {\n  if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false;\n  const [y, m, d] = s.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;\n}\n\nfunction normalizarHora(s) {\n  if (typeof s !== 'string') return null;\n  const m = s.trim().match(/^(\\d{1,2})[:.h](\\d{2})?/i) || s.trim().match(/^(\\d{1,2})$/);\n  if (!m) return null;\n  const h = Number(m[1]), mi = Number(m[2] || 0);\n  if (h > 23 || mi > 59) return null;\n  return `${pad2(h)}:${pad2(mi)}`;\n}\n\n/* Calendario de referencia que se entrega al modelo: así no tiene que calcular fechas. */\nfunction calendarioReferencia(hoy) {\n  const filas = [];\n  for (let i = -7; i <= 21; i++) {\n    const f = sumarDias(hoy, i);\n    let etiqueta = '';\n    if (i === 0) etiqueta = ' (HOY)';\n    else if (i === 1) etiqueta = ' (mañana)';\n    else if (i === 2) etiqueta = ' (pasado mañana)';\n    else if (i === -1) etiqueta = ' (ayer)';\n    filas.push(`${diaSemana(f)} ${f}${etiqueta}`);\n  }\n  return filas.join('\\n');\n}\n\n/* ---------- Normalización ---------- */\n\nfunction sinTildes(s) {\n  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n}\n\nfunction normalizarCategoria(c) {\n  const s = sinTildes(c);\n  const mapa = {\n    tarea: 'tarea', tareas: 'tarea', task: 'tarea',\n    recordatorio: 'recordatorio', recordatorios: 'recordatorio', reminder: 'recordatorio',\n    evento: 'evento', eventos: 'evento', compromiso: 'evento', compromisos: 'evento', cita: 'evento',\n    idea: 'idea', ideas: 'idea',\n    conocimiento: 'conocimiento', conocimientos: 'conocimiento', aprendizaje: 'conocimiento',\n    otros: 'otros', otro: 'otros', 'otros temas': 'otros', archivo: 'otros',\n  };\n  return mapa[s] || null;\n}\n\nfunction normalizarEstadoIdea(e) {\n  const s = sinTildes(e);\n  if (s.startsWith('explor')) return 'en exploración';\n  if (s.startsWith('desarroll') || s === 'en desarrollo') return 'en desarrollo';\n  if (s.startsWith('descart')) return 'descartada';\n  return 'nueva';\n}\n\nfunction normalizarEstadoTarea(e) {\n  const s = sinTildes(e);\n  if (s.includes('curso') || s.includes('progreso')) return 'en curso';\n  if (s.startsWith('complet') || s === 'hecha' || s === 'terminada') return 'completada';\n  return 'pendiente';\n}\n\nfunction textoONull(v, max = 4000) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim();\n  if (!s || ['null', 'none', 'n/a', 'ninguno', 'ninguna', 'no especificado', 'no mencionado'].includes(s.toLowerCase())) return null;\n  return s.slice(0, max);\n}\n\nfunction listaTextos(v, max = 10) {\n  if (typeof v === 'string') v = v.split(/[,;]/);\n  if (!Array.isArray(v)) return [];\n  const vistos = new Set();\n  const out = [];\n  for (const x of v) {\n    const t = textoONull(x, 60);\n    if (!t) continue;\n    const k = t.toLowerCase().replace(/^#/, '');\n    if (vistos.has(k)) continue;\n    vistos.add(k);\n    out.push(k);\n    if (out.length >= max) break;\n  }\n  return out;\n}\n\n/* ---------- Lectura del JSON devuelto por Ollama ---------- */\n\nfunction parsearJSON(texto) {\n  if (texto && typeof texto === 'object') return { ok: true, valor: texto };\n  const s = String(texto || '').trim();\n  try { return { ok: true, valor: JSON.parse(s) }; } catch (e) { /* sigue */ }\n  // Modelos pequeños a veces envuelven el JSON en ```json ... ``` o texto extra.\n  const ini = s.indexOf('{'), fin = s.lastIndexOf('}');\n  if (ini >= 0 && fin > ini) {\n    try { return { ok: true, valor: JSON.parse(s.slice(ini, fin + 1)) }; } catch (e) { /* sigue */ }\n  }\n  return { ok: false, error: 'La respuesta del modelo no es un JSON válido' };\n}\n\n/* ---------- Validación de cada registro ---------- */\n\nconst PREGUNTA_CATEGORIA = '¿Dónde guardo esto? Elige una categoría.';\n\nfunction aRevision(r, motivo, pregunta, tipo) {\n  return {\n    categoria_destino: 'revision',\n    registro: Object.assign({}, r, {\n      motivo_revision: motivo,\n      pregunta: pregunta || r.pregunta || PREGUNTA_CATEGORIA,\n      tipo_revision: tipo, // 'categoria' (botones) o 'aclaracion' (responder con texto)\n    }),\n  };\n}\n\nfunction validarRegistro(bruto, ctx, opciones = {}) {\n  const errores = [];\n  const r0 = bruto && typeof bruto === 'object' ? bruto : {};\n  const categoriaOriginal = r0.categoria;\n  const categoria = normalizarCategoria(r0.categoria);\n  const contenido = textoONull(r0.contenido, 8000) || textoONull(r0.titulo, 8000) || '';\n  const r = {\n    categoria: categoria || 'otros',\n    titulo: (textoONull(r0.titulo, 140) || contenido.slice(0, 80) || 'Sin título'),\n    contenido,\n    fecha: fechaValida(r0.fecha) ? r0.fecha : null,\n    hora: normalizarHora(r0.hora),\n    hora_fin: normalizarHora(r0.hora_fin),\n    prioridad: PRIORIDADES.includes(sinTildes(r0.prioridad)) ? sinTildes(r0.prioridad) : null,\n    estado: null,\n    proyecto: textoONull(r0.proyecto, 120),\n    etiquetas: listaTextos(r0.etiquetas),\n    lugar: textoONull(r0.lugar, 200),\n    participantes: listaTextos(r0.participantes, 20),\n    fuente: textoONull(r0.fuente, 300),\n    area_tematica: textoONull(r0.area_tematica, 120),\n    aplicacion: textoONull(r0.aplicacion, 2000),\n    concepto_principal: textoONull(r0.concepto_principal, 500),\n    id_local: textoONull(r0.id_local, 20),\n    relacionado_con: textoONull(r0.relacionado_con, 20),\n    requiere_confirmacion: r0.requiere_confirmacion === true,\n    confianza: typeof r0.confianza === 'number' ? Math.max(0, Math.min(1, r0.confianza)) : null,\n    pregunta: textoONull(r0.pregunta, 300),\n  };\n  if (r0.fecha && !r.fecha) errores.push(`fecha inválida \"${r0.fecha}\" descartada`);\n  if (r0.hora && !r.hora) errores.push(`hora inválida \"${r0.hora}\" descartada`);\n\n  if (!categoria) {\n    return { ...aRevision(r, `Categoría no reconocida: \"${categoriaOriginal}\"`, null, 'categoria'), errores };\n  }\n  if (!contenido) {\n    return { ...aRevision(r, 'Registro sin contenido', '¿Qué querías guardar aquí?', 'aclaracion'), errores };\n  }\n\n  // Recordatorios relativos (\"en dos horas\"): el validador calcula la fecha exacta.\n  const despl = Number(r0.desplazamiento_minutos);\n  if (r.categoria === 'recordatorio' && Number.isFinite(despl) && despl > 0 && despl <= 60 * 24 * 60) {\n    const t = sumarMinutos(ctx.hoy, ctx.hora, Math.round(despl));\n    r.fecha = t.fecha;\n    r.hora = t.hora;\n  }\n\n  // Reclasificación manual: el usuario ya decidió la categoría, no se vuelve a dudar de ella.\n  if (!opciones.categoriaForzada) {\n    if (r.requiere_confirmacion) {\n      return { ...aRevision(r, 'El modelo pidió confirmación', r.pregunta, r.pregunta ? 'aclaracion' : 'categoria'), errores };\n    }\n    if (r.confianza !== null && r.confianza < UMBRAL_CONFIANZA) {\n      return { ...aRevision(r, `Confianza baja (${r.confianza})`, null, 'categoria'), errores };\n    }\n  }\n\n  switch (r.categoria) {\n    case 'tarea':\n      r.estado = normalizarEstadoTarea(r0.estado);\n      break;\n    case 'recordatorio':\n      if (!r.fecha || !r.hora) {\n        const falta = !r.fecha && !r.hora ? 'el día y la hora' : (!r.fecha ? 'el día' : 'la hora');\n        return { ...aRevision(r, 'Recordatorio sin fecha u hora clara',\n          `Para el recordatorio «${r.titulo}» me falta ${falta}. ¿Cuándo te aviso?`, 'aclaracion'), errores };\n      }\n      r.estado = 'programado';\n      break;\n    case 'evento':\n      if (!r.fecha) {\n        return { ...aRevision(r, 'Evento sin fecha',\n          `¿Qué día es «${r.titulo}»? (y la hora, si la sabes)`, 'aclaracion'), errores };\n      }\n      if (r.hora_fin && (!r.hora || r.hora_fin <= r.hora)) r.hora_fin = null;\n      r.estado = 'agendado';\n      break;\n    case 'idea':\n      r.estado = normalizarEstadoIdea(r0.estado);\n      r.prioridad = null;\n      break;\n    case 'conocimiento':\n      r.prioridad = null;\n      r.concepto_principal = r.concepto_principal || r.titulo;\n      break;\n    case 'otros':\n      r.prioridad = null;\n      break;\n  }\n  return { categoria_destino: r.categoria, registro: r, errores };\n}\n\n/* ---------- Validación de la salida completa ---------- */\n\nfunction validarSalida(respuesta, ctx) {\n  const leido = parsearJSON(respuesta);\n  const original = ctx.texto_original || '';\n  if (!leido.ok) {\n    // Nunca se pierde la información: va a revisión con la transcripción completa.\n    return {\n      valido: false,\n      errores: [leido.error],\n      transcripcion_original: original,\n      transcripcion_corregida: original,\n      resumen_general: original.slice(0, 200),\n      registros: [aRevision({ categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje', contenido: original, etiquetas: [] },\n        'El clasificador no devolvió un JSON válido', null, 'categoria')],\n      requiere_aclaracion: false,\n      pregunta_aclaracion: null,\n    };\n  }\n  const v = leido.valor || {};\n  const errores = [];\n  if (!Array.isArray(v.registros)) errores.push('Falta el arreglo \"registros\"');\n  const brutos = Array.isArray(v.registros) ? v.registros.slice(0, 15) : [];\n  const registros = [];\n  brutos.forEach((b, i) => {\n    const res = validarRegistro(b, ctx);\n    if (!res.registro.id_local) res.registro.id_local = `r${i + 1}`;\n    res.errores.forEach(e => errores.push(`registro ${i + 1}: ${e}`));\n    registros.push({ categoria_destino: res.categoria_destino, registro: res.registro });\n  });\n\n  const requiereAclaracion = v.requiere_aclaracion === true;\n  const pregunta = textoONull(v.pregunta_aclaracion, 300);\n\n  if (registros.length === 0) {\n    if (requiereAclaracion && pregunta) {\n      registros.push(aRevision({ categoria: 'otros', titulo: original.slice(0, 80), contenido: original, etiquetas: [] },\n        'El modelo necesita una aclaración', pregunta, 'aclaracion'));\n    } else {\n      // Regla: no descartar información que no se pudo clasificar.\n      registros.push({\n        categoria_destino: 'otros',\n        registro: {\n          categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje sin clasificar', contenido: textoONull(v.resumen_general) || original,\n          fecha: null, hora: null, etiquetas: [], area_tematica: null, id_local: 'r1', requiere_confirmacion: false,\n        },\n      });\n    }\n  }\n\n  return {\n    valido: errores.length === 0,\n    errores,\n    transcripcion_original: original, // siempre la real, nunca la reescrita por el modelo\n    transcripcion_corregida: textoONull(v.transcripcion_corregida, 20000) || original,\n    resumen_general: textoONull(v.resumen_general, 1000) || original.slice(0, 200),\n    registros,\n    requiere_aclaracion: requiereAclaracion,\n    pregunta_aclaracion: pregunta,\n  };\n}\n\n/* Esquema que se pasa a Ollama en \"format\" para forzar la estructura. */\nfunction esquemaSalida() {\n  const txt = { type: ['string', 'null'] };\n  return {\n    type: 'object',\n    properties: {\n      transcripcion_original: { type: 'string' },\n      transcripcion_corregida: { type: 'string' },\n      resumen_general: { type: 'string' },\n      registros: {\n        type: 'array',\n        items: {\n          type: 'object',\n          properties: {\n            id_local: { type: 'string' },\n            categoria: { type: 'string', enum: CATEGORIAS },\n            titulo: { type: 'string' },\n            contenido: { type: 'string' },\n            fecha: txt,\n            hora: txt,\n            hora_fin: txt,\n            desplazamiento_minutos: { type: ['integer', 'null'] },\n            prioridad: { type: ['string', 'null'], enum: ['alta', 'media', 'baja', null] },\n            estado: txt,\n            proyecto: txt,\n            lugar: txt,\n            participantes: { type: 'array', items: { type: 'string' } },\n            fuente: txt,\n            area_tematica: txt,\n            concepto_principal: txt,\n            aplicacion: txt,\n            etiquetas: { type: 'array', items: { type: 'string' } },\n            relacionado_con: txt,\n            confianza: { type: 'number' },\n            requiere_confirmacion: { type: 'boolean' },\n            pregunta: txt,\n          },\n          required: ['id_local', 'categoria', 'titulo', 'contenido', 'fecha', 'hora', 'prioridad', 'estado',\n            'proyecto', 'etiquetas', 'confianza', 'requiere_confirmacion'],\n        },\n      },\n      requiere_aclaracion: { type: 'boolean' },\n      pregunta_aclaracion: txt,\n    },\n    required: ['transcripcion_original', 'transcripcion_corregida', 'resumen_general', 'registros',\n      'requiere_aclaracion', 'pregunta_aclaracion'],\n  };\n}\n\n\n\n// ---- nodo ----\n// Nodo \"Validar JSON\": nada se distribuye sin pasar por aquí.\nconst prep = $('Preparar prompt').first().json;\nconst resp = $input.first().json;\nconst contenido = resp.message ? resp.message.content : (resp.response || resp);\nconst v = validarSalida(contenido, prep.ctx);\nreturn [{ json: {\n  chat_id: prep.chat_id,\n  ...v,\n  captura: {\n    ejecucion_id: $execution.id,\n    origen: prep.origen,\n    transcripcion_original: v.transcripcion_original,\n    transcripcion_corregida: v.transcripcion_corregida,\n    resumen_general: v.resumen_general,\n    json_clasificador: parsearJSON(contenido).valor || { bruto: String(contenido).slice(0, 5000) },\n    errores: v.errores,\n  },\n} }];\n"
+      }
+    },
+    {
+      "id": "5a37990f-098f-463e-ad29-2bffb9a9fbbf",
+      "name": "Guardar captura",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_captura($1::jsonb) AS captura_id",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json.captura) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "bd4d2cc9-15f0-4fd3-aba9-1719ce666816",
+      "name": "Expandir registros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2680,
+        100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Expandir registros\": un ítem por registro, todos ligados a la misma captura.\nconst v = $('Validar JSON').first().json;\nconst captura_id = $input.first().json.captura_id;\nreturn v.registros.map(r => ({ json: {\n  categoria_destino: r.categoria_destino,\n  captura_id,\n  ejecucion_id: $execution.id,\n  chat_id: v.chat_id,\n  resumen: v.resumen_general,\n  registro: r.registro,\n} }));\n"
+      }
+    },
+    {
+      "id": "e54fa27d-ed0c-4dcb-a98d-c525501a121e",
+      "name": "Distribuir por categoría",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2940,
+        -60
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "204e6013-afd5-4406-a9fc-47bfae6714b3",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "tarea",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "tarea"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "26c258e9-9fb4-403f-a1f6-3d8b48385399",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "recordatorio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "recordatorio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a1815957-896e-4228-a49d-857b7b629dd0",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "evento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "evento"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8df1a008-911d-407a-a019-9e993ccfcc5c",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "idea",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "idea"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d451cbbc-3cef-4766-aa14-804cb2630e3c",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "conocimiento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "conocimiento"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a5a193c5-f434-4068-aa02-ace105552d76",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "otros",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "otros"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3ba219e8-4121-49ea-a61a-83f79bb9d7e7",
+                    "leftValue": "={{ $json.categoria_destino }}",
+                    "rightValue": "revision",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "revision"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "244e6070-2e6f-4108-aeb3-cf54a78ac315",
+      "name": "Guardar tarea",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        -560
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_tarea($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "4b1d8230-4b61-42de-a5b5-a2cb95d41e1a",
+      "name": "Programar recordatorio",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        -390
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_recordatorio($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "7db37879-a5f6-49f6-a4f0-146e8b7db8ed",
+      "name": "Preparar evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3240,
+        -220
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "/*\n * Lógica compartida del clasificador.\n * Este archivo se incrusta tal cual en los nodos Code de n8n (ver tools/build-workflows.js)\n * y también se prueba con Node (tests/test-validador.js). No usa dependencias externas.\n */\n\nconst CATEGORIAS = ['tarea', 'recordatorio', 'evento', 'idea', 'conocimiento', 'otros'];\nconst PRIORIDADES = ['alta', 'media', 'baja'];\nconst ESTADOS_TAREA = ['pendiente', 'en curso', 'completada'];\nconst ESTADOS_IDEA = ['nueva', 'en exploración', 'en desarrollo', 'descartada'];\nconst DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nconst UMBRAL_CONFIANZA = 0.6;\n\nconst pad2 = n => String(n).padStart(2, '0');\n\n/* ---------- Fechas en la zona horaria del usuario (sin librerías) ---------- */\n\nfunction ahoraEnZona(zona, base = new Date()) {\n  const f = new Intl.DateTimeFormat('en-CA', {\n    timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const p = Object.fromEntries(f.formatToParts(base).map(x => [x.type, x.value]));\n  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };\n}\n\nfunction sumarDias(fecha, n) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d + n));\n  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;\n}\n\nfunction diaSemana(fecha) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  return DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];\n}\n\nfunction sumarMinutos(fecha, hora, minutos) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const [h, mi] = hora.split(':').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d, h, mi + minutos));\n  return {\n    fecha: `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`,\n    hora: `${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`,\n  };\n}\n\nfunction fechaValida(s) {\n  if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false;\n  const [y, m, d] = s.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;\n}\n\nfunction normalizarHora(s) {\n  if (typeof s !== 'string') return null;\n  const m = s.trim().match(/^(\\d{1,2})[:.h](\\d{2})?/i) || s.trim().match(/^(\\d{1,2})$/);\n  if (!m) return null;\n  const h = Number(m[1]), mi = Number(m[2] || 0);\n  if (h > 23 || mi > 59) return null;\n  return `${pad2(h)}:${pad2(mi)}`;\n}\n\n/* Calendario de referencia que se entrega al modelo: así no tiene que calcular fechas. */\nfunction calendarioReferencia(hoy) {\n  const filas = [];\n  for (let i = -7; i <= 21; i++) {\n    const f = sumarDias(hoy, i);\n    let etiqueta = '';\n    if (i === 0) etiqueta = ' (HOY)';\n    else if (i === 1) etiqueta = ' (mañana)';\n    else if (i === 2) etiqueta = ' (pasado mañana)';\n    else if (i === -1) etiqueta = ' (ayer)';\n    filas.push(`${diaSemana(f)} ${f}${etiqueta}`);\n  }\n  return filas.join('\\n');\n}\n\n/* ---------- Normalización ---------- */\n\nfunction sinTildes(s) {\n  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n}\n\nfunction normalizarCategoria(c) {\n  const s = sinTildes(c);\n  const mapa = {\n    tarea: 'tarea', tareas: 'tarea', task: 'tarea',\n    recordatorio: 'recordatorio', recordatorios: 'recordatorio', reminder: 'recordatorio',\n    evento: 'evento', eventos: 'evento', compromiso: 'evento', compromisos: 'evento', cita: 'evento',\n    idea: 'idea', ideas: 'idea',\n    conocimiento: 'conocimiento', conocimientos: 'conocimiento', aprendizaje: 'conocimiento',\n    otros: 'otros', otro: 'otros', 'otros temas': 'otros', archivo: 'otros',\n  };\n  return mapa[s] || null;\n}\n\nfunction normalizarEstadoIdea(e) {\n  const s = sinTildes(e);\n  if (s.startsWith('explor')) return 'en exploración';\n  if (s.startsWith('desarroll') || s === 'en desarrollo') return 'en desarrollo';\n  if (s.startsWith('descart')) return 'descartada';\n  return 'nueva';\n}\n\nfunction normalizarEstadoTarea(e) {\n  const s = sinTildes(e);\n  if (s.includes('curso') || s.includes('progreso')) return 'en curso';\n  if (s.startsWith('complet') || s === 'hecha' || s === 'terminada') return 'completada';\n  return 'pendiente';\n}\n\nfunction textoONull(v, max = 4000) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim();\n  if (!s || ['null', 'none', 'n/a', 'ninguno', 'ninguna', 'no especificado', 'no mencionado'].includes(s.toLowerCase())) return null;\n  return s.slice(0, max);\n}\n\nfunction listaTextos(v, max = 10) {\n  if (typeof v === 'string') v = v.split(/[,;]/);\n  if (!Array.isArray(v)) return [];\n  const vistos = new Set();\n  const out = [];\n  for (const x of v) {\n    const t = textoONull(x, 60);\n    if (!t) continue;\n    const k = t.toLowerCase().replace(/^#/, '');\n    if (vistos.has(k)) continue;\n    vistos.add(k);\n    out.push(k);\n    if (out.length >= max) break;\n  }\n  return out;\n}\n\n/* ---------- Lectura del JSON devuelto por Ollama ---------- */\n\nfunction parsearJSON(texto) {\n  if (texto && typeof texto === 'object') return { ok: true, valor: texto };\n  const s = String(texto || '').trim();\n  try { return { ok: true, valor: JSON.parse(s) }; } catch (e) { /* sigue */ }\n  // Modelos pequeños a veces envuelven el JSON en ```json ... ``` o texto extra.\n  const ini = s.indexOf('{'), fin = s.lastIndexOf('}');\n  if (ini >= 0 && fin > ini) {\n    try { return { ok: true, valor: JSON.parse(s.slice(ini, fin + 1)) }; } catch (e) { /* sigue */ }\n  }\n  return { ok: false, error: 'La respuesta del modelo no es un JSON válido' };\n}\n\n/* ---------- Validación de cada registro ---------- */\n\nconst PREGUNTA_CATEGORIA = '¿Dónde guardo esto? Elige una categoría.';\n\nfunction aRevision(r, motivo, pregunta, tipo) {\n  return {\n    categoria_destino: 'revision',\n    registro: Object.assign({}, r, {\n      motivo_revision: motivo,\n      pregunta: pregunta || r.pregunta || PREGUNTA_CATEGORIA,\n      tipo_revision: tipo, // 'categoria' (botones) o 'aclaracion' (responder con texto)\n    }),\n  };\n}\n\nfunction validarRegistro(bruto, ctx, opciones = {}) {\n  const errores = [];\n  const r0 = bruto && typeof bruto === 'object' ? bruto : {};\n  const categoriaOriginal = r0.categoria;\n  const categoria = normalizarCategoria(r0.categoria);\n  const contenido = textoONull(r0.contenido, 8000) || textoONull(r0.titulo, 8000) || '';\n  const r = {\n    categoria: categoria || 'otros',\n    titulo: (textoONull(r0.titulo, 140) || contenido.slice(0, 80) || 'Sin título'),\n    contenido,\n    fecha: fechaValida(r0.fecha) ? r0.fecha : null,\n    hora: normalizarHora(r0.hora),\n    hora_fin: normalizarHora(r0.hora_fin),\n    prioridad: PRIORIDADES.includes(sinTildes(r0.prioridad)) ? sinTildes(r0.prioridad) : null,\n    estado: null,\n    proyecto: textoONull(r0.proyecto, 120),\n    etiquetas: listaTextos(r0.etiquetas),\n    lugar: textoONull(r0.lugar, 200),\n    participantes: listaTextos(r0.participantes, 20),\n    fuente: textoONull(r0.fuente, 300),\n    area_tematica: textoONull(r0.area_tematica, 120),\n    aplicacion: textoONull(r0.aplicacion, 2000),\n    concepto_principal: textoONull(r0.concepto_principal, 500),\n    id_local: textoONull(r0.id_local, 20),\n    relacionado_con: textoONull(r0.relacionado_con, 20),\n    requiere_confirmacion: r0.requiere_confirmacion === true,\n    confianza: typeof r0.confianza === 'number' ? Math.max(0, Math.min(1, r0.confianza)) : null,\n    pregunta: textoONull(r0.pregunta, 300),\n  };\n  if (r0.fecha && !r.fecha) errores.push(`fecha inválida \"${r0.fecha}\" descartada`);\n  if (r0.hora && !r.hora) errores.push(`hora inválida \"${r0.hora}\" descartada`);\n\n  if (!categoria) {\n    return { ...aRevision(r, `Categoría no reconocida: \"${categoriaOriginal}\"`, null, 'categoria'), errores };\n  }\n  if (!contenido) {\n    return { ...aRevision(r, 'Registro sin contenido', '¿Qué querías guardar aquí?', 'aclaracion'), errores };\n  }\n\n  // Recordatorios relativos (\"en dos horas\"): el validador calcula la fecha exacta.\n  const despl = Number(r0.desplazamiento_minutos);\n  if (r.categoria === 'recordatorio' && Number.isFinite(despl) && despl > 0 && despl <= 60 * 24 * 60) {\n    const t = sumarMinutos(ctx.hoy, ctx.hora, Math.round(despl));\n    r.fecha = t.fecha;\n    r.hora = t.hora;\n  }\n\n  // Reclasificación manual: el usuario ya decidió la categoría, no se vuelve a dudar de ella.\n  if (!opciones.categoriaForzada) {\n    if (r.requiere_confirmacion) {\n      return { ...aRevision(r, 'El modelo pidió confirmación', r.pregunta, r.pregunta ? 'aclaracion' : 'categoria'), errores };\n    }\n    if (r.confianza !== null && r.confianza < UMBRAL_CONFIANZA) {\n      return { ...aRevision(r, `Confianza baja (${r.confianza})`, null, 'categoria'), errores };\n    }\n  }\n\n  switch (r.categoria) {\n    case 'tarea':\n      r.estado = normalizarEstadoTarea(r0.estado);\n      break;\n    case 'recordatorio':\n      if (!r.fecha || !r.hora) {\n        const falta = !r.fecha && !r.hora ? 'el día y la hora' : (!r.fecha ? 'el día' : 'la hora');\n        return { ...aRevision(r, 'Recordatorio sin fecha u hora clara',\n          `Para el recordatorio «${r.titulo}» me falta ${falta}. ¿Cuándo te aviso?`, 'aclaracion'), errores };\n      }\n      r.estado = 'programado';\n      break;\n    case 'evento':\n      if (!r.fecha) {\n        return { ...aRevision(r, 'Evento sin fecha',\n          `¿Qué día es «${r.titulo}»? (y la hora, si la sabes)`, 'aclaracion'), errores };\n      }\n      if (r.hora_fin && (!r.hora || r.hora_fin <= r.hora)) r.hora_fin = null;\n      r.estado = 'agendado';\n      break;\n    case 'idea':\n      r.estado = normalizarEstadoIdea(r0.estado);\n      r.prioridad = null;\n      break;\n    case 'conocimiento':\n      r.prioridad = null;\n      r.concepto_principal = r.concepto_principal || r.titulo;\n      break;\n    case 'otros':\n      r.prioridad = null;\n      break;\n  }\n  return { categoria_destino: r.categoria, registro: r, errores };\n}\n\n/* ---------- Validación de la salida completa ---------- */\n\nfunction validarSalida(respuesta, ctx) {\n  const leido = parsearJSON(respuesta);\n  const original = ctx.texto_original || '';\n  if (!leido.ok) {\n    // Nunca se pierde la información: va a revisión con la transcripción completa.\n    return {\n      valido: false,\n      errores: [leido.error],\n      transcripcion_original: original,\n      transcripcion_corregida: original,\n      resumen_general: original.slice(0, 200),\n      registros: [aRevision({ categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje', contenido: original, etiquetas: [] },\n        'El clasificador no devolvió un JSON válido', null, 'categoria')],\n      requiere_aclaracion: false,\n      pregunta_aclaracion: null,\n    };\n  }\n  const v = leido.valor || {};\n  const errores = [];\n  if (!Array.isArray(v.registros)) errores.push('Falta el arreglo \"registros\"');\n  const brutos = Array.isArray(v.registros) ? v.registros.slice(0, 15) : [];\n  const registros = [];\n  brutos.forEach((b, i) => {\n    const res = validarRegistro(b, ctx);\n    if (!res.registro.id_local) res.registro.id_local = `r${i + 1}`;\n    res.errores.forEach(e => errores.push(`registro ${i + 1}: ${e}`));\n    registros.push({ categoria_destino: res.categoria_destino, registro: res.registro });\n  });\n\n  const requiereAclaracion = v.requiere_aclaracion === true;\n  const pregunta = textoONull(v.pregunta_aclaracion, 300);\n\n  if (registros.length === 0) {\n    if (requiereAclaracion && pregunta) {\n      registros.push(aRevision({ categoria: 'otros', titulo: original.slice(0, 80), contenido: original, etiquetas: [] },\n        'El modelo necesita una aclaración', pregunta, 'aclaracion'));\n    } else {\n      // Regla: no descartar información que no se pudo clasificar.\n      registros.push({\n        categoria_destino: 'otros',\n        registro: {\n          categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje sin clasificar', contenido: textoONull(v.resumen_general) || original,\n          fecha: null, hora: null, etiquetas: [], area_tematica: null, id_local: 'r1', requiere_confirmacion: false,\n        },\n      });\n    }\n  }\n\n  return {\n    valido: errores.length === 0,\n    errores,\n    transcripcion_original: original, // siempre la real, nunca la reescrita por el modelo\n    transcripcion_corregida: textoONull(v.transcripcion_corregida, 20000) || original,\n    resumen_general: textoONull(v.resumen_general, 1000) || original.slice(0, 200),\n    registros,\n    requiere_aclaracion: requiereAclaracion,\n    pregunta_aclaracion: pregunta,\n  };\n}\n\n/* Esquema que se pasa a Ollama en \"format\" para forzar la estructura. */\nfunction esquemaSalida() {\n  const txt = { type: ['string', 'null'] };\n  return {\n    type: 'object',\n    properties: {\n      transcripcion_original: { type: 'string' },\n      transcripcion_corregida: { type: 'string' },\n      resumen_general: { type: 'string' },\n      registros: {\n        type: 'array',\n        items: {\n          type: 'object',\n          properties: {\n            id_local: { type: 'string' },\n            categoria: { type: 'string', enum: CATEGORIAS },\n            titulo: { type: 'string' },\n            contenido: { type: 'string' },\n            fecha: txt,\n            hora: txt,\n            hora_fin: txt,\n            desplazamiento_minutos: { type: ['integer', 'null'] },\n            prioridad: { type: ['string', 'null'], enum: ['alta', 'media', 'baja', null] },\n            estado: txt,\n            proyecto: txt,\n            lugar: txt,\n            participantes: { type: 'array', items: { type: 'string' } },\n            fuente: txt,\n            area_tematica: txt,\n            concepto_principal: txt,\n            aplicacion: txt,\n            etiquetas: { type: 'array', items: { type: 'string' } },\n            relacionado_con: txt,\n            confianza: { type: 'number' },\n            requiere_confirmacion: { type: 'boolean' },\n            pregunta: txt,\n          },\n          required: ['id_local', 'categoria', 'titulo', 'contenido', 'fecha', 'hora', 'prioridad', 'estado',\n            'proyecto', 'etiquetas', 'confianza', 'requiere_confirmacion'],\n        },\n      },\n      requiere_aclaracion: { type: 'boolean' },\n      pregunta_aclaracion: txt,\n    },\n    required: ['transcripcion_original', 'transcripcion_corregida', 'resumen_general', 'registros',\n      'requiere_aclaracion', 'pregunta_aclaracion'],\n  };\n}\n\n\n\n// ---- nodo ----\n// Nodo \"Preparar evento\": fechas ISO para Google Calendar (con hora o de día completo).\nconst zona = $env.GENERIC_TIMEZONE || 'America/Santiago';\nreturn $input.all().map(it => {\n  const r = it.json.registro;\n  let inicio, fin, todoElDia = 'no';\n  if (r.hora) {\n    inicio = `${r.fecha}T${r.hora}:00`;\n    const f = r.hora_fin ? { fecha: r.fecha, hora: r.hora_fin } : sumarMinutos(r.fecha, r.hora, 60);\n    fin = `${f.fecha}T${f.hora}:00`;\n  } else {\n    todoElDia = 'yes';\n    inicio = r.fecha;\n    fin = sumarDias(r.fecha, 1);\n  }\n  const partes = [r.contenido];\n  if (r.participantes && r.participantes.length) partes.push('Participantes: ' + r.participantes.join(', '));\n  partes.push(`Creado por el asistente desde Telegram (${it.json.ejecucion_id}).`);\n  return { json: { ...it.json, gcal: { inicio, fin, todoElDia, zona, titulo: r.titulo, descripcion: partes.join('\\n\\n'), lugar: r.lugar || '' } } };\n});\n"
+      }
+    },
+    {
+      "id": "919ab6b6-0473-4a88-aee3-caf9d4879013",
+      "name": "Google Calendar · crear evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3460,
+        -220
+      ],
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.gcal.inicio }}",
+        "end": "={{ $json.gcal.fin }}",
+        "useDefaultReminders": true,
+        "additionalFields": {
+          "summary": "={{ $json.gcal.titulo }}",
+          "description": "={{ $json.gcal.descripcion }}",
+          "location": "={{ $json.gcal.lugar }}",
+          "allday": "={{ $json.gcal.todoElDia }}"
+        }
+      },
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "asistGCal0000001",
+          "name": "Google Calendar Asistente"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b428b5f5-e2f2-41a0-a624-f668e09f3522",
+      "name": "Guardar evento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3680,
+        -220
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_evento($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify(Object.assign({}, $('Preparar evento').item.json, { google_event_id: $json.id || null, google_link: $json.htmlLink || null, calendar_error: $json.error ? JSON.stringify($json.error).slice(0, 300) : null })) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "129e3ae1-39f4-43a9-ac3f-8c619149e987",
+      "name": "Guardar idea",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        -50
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_idea($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "134a417e-f7fa-4772-a28f-d6cc0e54dc6b",
+      "name": "Guardar conocimiento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        120
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_conocimiento($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "c6dcc925-a9b3-4e6b-ad44-dcfba853cd52",
+      "name": "Guardar en archivo general",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        290
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_otros($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "ae0536ce-04ee-491a-a8ee-5609aa0de9b3",
+      "name": "Guardar en revisión",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3240,
+        460
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT guardar_revision($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "2bc0b401-070d-4d3e-a8b3-5febd42ef2a1",
+      "name": "Telegram · preguntar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3460,
+        460
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.r.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "2fcc9563-5858-4ae6-adfa-976ceee195c8",
+      "name": "Registrar pregunta",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3680,
+        460
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT registrar_msg_revision($1::int, $2::bigint)",
+        "options": {
+          "queryReplacement": "={{ [ $('Guardar en revisión').item.json.r.id, $json.result.message_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "9ccff86f-1d27-4e55-a6e8-eccf7dd7295c",
+      "name": "Una sola vez",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2940,
+        520
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Una sola vez\": se ejecuta después de que todas las ramas del Switch terminaron\n// (orden de ejecución v1: rama superior completa antes que la inferior).\nconst p = $input.first().json;\nreturn [{ json: { ejecucion_id: $execution.id, chat_id: p.chat_id, resumen: p.resumen || null } }];\n"
+      }
+    },
+    {
+      "id": "8f85d531-631b-4678-abce-511be9196db8",
+      "name": "Armar confirmación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3160,
+        520
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT confirmacion($1::jsonb) AS r",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "bcd971b9-268d-4f22-adac-9bdc77bb9e5e",
+      "name": "Telegram · confirmación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3380,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: null || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "062baf51-ae0c-4531-aaaa-45429df18e20",
+      "name": "Ejecutar comando",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        700,
+        420
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT comando_telegram($1::text) AS r",
+        "options": {
+          "queryReplacement": "={{ [ $json.texto ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "7bd4815a-d9d9-425a-a4ec-e6aa34ae5822",
+      "name": "Ejecutar botón",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        700,
+        620
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT accion_boton($1::text) AS r",
+        "options": {
+          "queryReplacement": "={{ [ $json.callback_data ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "8143eec4-ccab-4a90-a9b8-b1092b5a438b",
+      "name": "Telegram · responder botón",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        620
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ callback_query_id: $('Clasificar entrada').first().json.callback_id, text: String($json.r.texto || 'Listo').replace(/<[^>]+>/g, '').slice(0, 190) }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "ad8fb5f4-55ff-465c-aa82-92b48c5b252b",
+      "name": "Resultado de la acción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        520
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nodo \"Resultado de la acción\": normaliza lo que devolvió la base para comandos y botones.\nconst e = $('Clasificar entrada').first().json;\nconst r = $input.first().json.r || {};\nreturn [{ json: {\n  chat_id: e.chat_id,\n  texto: r.texto || 'Listo.',\n  teclado: r.teclado || null,\n  redistribuir: r.redistribuir || null,\n  eliminar_evento_google: r.eliminar_evento_google || null,\n} }];\n"
+      }
+    },
+    {
+      "id": "b06d5137-d3c0-47a0-a57e-39e9bcb7db2a",
+      "name": "Resultado del botón",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        680
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return [{ json: { r: $('Ejecutar botón').first().json.r } }];"
+      }
+    },
+    {
+      "id": "ef9b8674-ba7b-460e-a68e-d96005703f48",
+      "name": "Telegram · respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: String($json.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "a6a99649-2345-4eb8-a61a-1fa55ebd5d28",
+      "name": "¿Quitar de Google Calendar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1400,
+        600
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b2542b3a-7df4-4a6a-ad2d-43ff102ebc4f",
+              "leftValue": "={{ !!$('Resultado de la acción').first().json.eliminar_evento_google }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6791b8d4-f8b2-4197-a111-9d382ec1bfb3",
+      "name": "Google Calendar · eliminar evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1620,
+        600
+      ],
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+          "mode": "id"
+        },
+        "eventId": "={{ $('Resultado de la acción').first().json.eliminar_evento_google }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "asistGCal0000001",
+          "name": "Google Calendar Asistente"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "e06c3bdb-5e0f-4d9f-a128-bbc2b7a2de43",
+      "name": "¿Reclasificar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1400,
+        780
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5a855df6-b519-49f9-aef4-d338e8e70f45",
+              "leftValue": "={{ !!$('Resultado de la acción').first().json.redistribuir }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e0e4e7a1-34f8-4a67-a11e-ccdf11f3e1c3",
+      "name": "Registro reclasificado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        780
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "/*\n * Lógica compartida del clasificador.\n * Este archivo se incrusta tal cual en los nodos Code de n8n (ver tools/build-workflows.js)\n * y también se prueba con Node (tests/test-validador.js). No usa dependencias externas.\n */\n\nconst CATEGORIAS = ['tarea', 'recordatorio', 'evento', 'idea', 'conocimiento', 'otros'];\nconst PRIORIDADES = ['alta', 'media', 'baja'];\nconst ESTADOS_TAREA = ['pendiente', 'en curso', 'completada'];\nconst ESTADOS_IDEA = ['nueva', 'en exploración', 'en desarrollo', 'descartada'];\nconst DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];\nconst UMBRAL_CONFIANZA = 0.6;\n\nconst pad2 = n => String(n).padStart(2, '0');\n\n/* ---------- Fechas en la zona horaria del usuario (sin librerías) ---------- */\n\nfunction ahoraEnZona(zona, base = new Date()) {\n  const f = new Intl.DateTimeFormat('en-CA', {\n    timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const p = Object.fromEntries(f.formatToParts(base).map(x => [x.type, x.value]));\n  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}` };\n}\n\nfunction sumarDias(fecha, n) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d + n));\n  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;\n}\n\nfunction diaSemana(fecha) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  return DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];\n}\n\nfunction sumarMinutos(fecha, hora, minutos) {\n  const [y, m, d] = fecha.split('-').map(Number);\n  const [h, mi] = hora.split(':').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d, h, mi + minutos));\n  return {\n    fecha: `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`,\n    hora: `${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`,\n  };\n}\n\nfunction fechaValida(s) {\n  if (typeof s !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return false;\n  const [y, m, d] = s.split('-').map(Number);\n  const t = new Date(Date.UTC(y, m - 1, d));\n  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;\n}\n\nfunction normalizarHora(s) {\n  if (typeof s !== 'string') return null;\n  const m = s.trim().match(/^(\\d{1,2})[:.h](\\d{2})?/i) || s.trim().match(/^(\\d{1,2})$/);\n  if (!m) return null;\n  const h = Number(m[1]), mi = Number(m[2] || 0);\n  if (h > 23 || mi > 59) return null;\n  return `${pad2(h)}:${pad2(mi)}`;\n}\n\n/* Calendario de referencia que se entrega al modelo: así no tiene que calcular fechas. */\nfunction calendarioReferencia(hoy) {\n  const filas = [];\n  for (let i = -7; i <= 21; i++) {\n    const f = sumarDias(hoy, i);\n    let etiqueta = '';\n    if (i === 0) etiqueta = ' (HOY)';\n    else if (i === 1) etiqueta = ' (mañana)';\n    else if (i === 2) etiqueta = ' (pasado mañana)';\n    else if (i === -1) etiqueta = ' (ayer)';\n    filas.push(`${diaSemana(f)} ${f}${etiqueta}`);\n  }\n  return filas.join('\\n');\n}\n\n/* ---------- Normalización ---------- */\n\nfunction sinTildes(s) {\n  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();\n}\n\nfunction normalizarCategoria(c) {\n  const s = sinTildes(c);\n  const mapa = {\n    tarea: 'tarea', tareas: 'tarea', task: 'tarea',\n    recordatorio: 'recordatorio', recordatorios: 'recordatorio', reminder: 'recordatorio',\n    evento: 'evento', eventos: 'evento', compromiso: 'evento', compromisos: 'evento', cita: 'evento',\n    idea: 'idea', ideas: 'idea',\n    conocimiento: 'conocimiento', conocimientos: 'conocimiento', aprendizaje: 'conocimiento',\n    otros: 'otros', otro: 'otros', 'otros temas': 'otros', archivo: 'otros',\n  };\n  return mapa[s] || null;\n}\n\nfunction normalizarEstadoIdea(e) {\n  const s = sinTildes(e);\n  if (s.startsWith('explor')) return 'en exploración';\n  if (s.startsWith('desarroll') || s === 'en desarrollo') return 'en desarrollo';\n  if (s.startsWith('descart')) return 'descartada';\n  return 'nueva';\n}\n\nfunction normalizarEstadoTarea(e) {\n  const s = sinTildes(e);\n  if (s.includes('curso') || s.includes('progreso')) return 'en curso';\n  if (s.startsWith('complet') || s === 'hecha' || s === 'terminada') return 'completada';\n  return 'pendiente';\n}\n\nfunction textoONull(v, max = 4000) {\n  if (v === null || v === undefined) return null;\n  const s = String(v).trim();\n  if (!s || ['null', 'none', 'n/a', 'ninguno', 'ninguna', 'no especificado', 'no mencionado'].includes(s.toLowerCase())) return null;\n  return s.slice(0, max);\n}\n\nfunction listaTextos(v, max = 10) {\n  if (typeof v === 'string') v = v.split(/[,;]/);\n  if (!Array.isArray(v)) return [];\n  const vistos = new Set();\n  const out = [];\n  for (const x of v) {\n    const t = textoONull(x, 60);\n    if (!t) continue;\n    const k = t.toLowerCase().replace(/^#/, '');\n    if (vistos.has(k)) continue;\n    vistos.add(k);\n    out.push(k);\n    if (out.length >= max) break;\n  }\n  return out;\n}\n\n/* ---------- Lectura del JSON devuelto por Ollama ---------- */\n\nfunction parsearJSON(texto) {\n  if (texto && typeof texto === 'object') return { ok: true, valor: texto };\n  const s = String(texto || '').trim();\n  try { return { ok: true, valor: JSON.parse(s) }; } catch (e) { /* sigue */ }\n  // Modelos pequeños a veces envuelven el JSON en ```json ... ``` o texto extra.\n  const ini = s.indexOf('{'), fin = s.lastIndexOf('}');\n  if (ini >= 0 && fin > ini) {\n    try { return { ok: true, valor: JSON.parse(s.slice(ini, fin + 1)) }; } catch (e) { /* sigue */ }\n  }\n  return { ok: false, error: 'La respuesta del modelo no es un JSON válido' };\n}\n\n/* ---------- Validación de cada registro ---------- */\n\nconst PREGUNTA_CATEGORIA = '¿Dónde guardo esto? Elige una categoría.';\n\nfunction aRevision(r, motivo, pregunta, tipo) {\n  return {\n    categoria_destino: 'revision',\n    registro: Object.assign({}, r, {\n      motivo_revision: motivo,\n      pregunta: pregunta || r.pregunta || PREGUNTA_CATEGORIA,\n      tipo_revision: tipo, // 'categoria' (botones) o 'aclaracion' (responder con texto)\n    }),\n  };\n}\n\nfunction validarRegistro(bruto, ctx, opciones = {}) {\n  const errores = [];\n  const r0 = bruto && typeof bruto === 'object' ? bruto : {};\n  const categoriaOriginal = r0.categoria;\n  const categoria = normalizarCategoria(r0.categoria);\n  const contenido = textoONull(r0.contenido, 8000) || textoONull(r0.titulo, 8000) || '';\n  const r = {\n    categoria: categoria || 'otros',\n    titulo: (textoONull(r0.titulo, 140) || contenido.slice(0, 80) || 'Sin título'),\n    contenido,\n    fecha: fechaValida(r0.fecha) ? r0.fecha : null,\n    hora: normalizarHora(r0.hora),\n    hora_fin: normalizarHora(r0.hora_fin),\n    prioridad: PRIORIDADES.includes(sinTildes(r0.prioridad)) ? sinTildes(r0.prioridad) : null,\n    estado: null,\n    proyecto: textoONull(r0.proyecto, 120),\n    etiquetas: listaTextos(r0.etiquetas),\n    lugar: textoONull(r0.lugar, 200),\n    participantes: listaTextos(r0.participantes, 20),\n    fuente: textoONull(r0.fuente, 300),\n    area_tematica: textoONull(r0.area_tematica, 120),\n    aplicacion: textoONull(r0.aplicacion, 2000),\n    concepto_principal: textoONull(r0.concepto_principal, 500),\n    id_local: textoONull(r0.id_local, 20),\n    relacionado_con: textoONull(r0.relacionado_con, 20),\n    requiere_confirmacion: r0.requiere_confirmacion === true,\n    confianza: typeof r0.confianza === 'number' ? Math.max(0, Math.min(1, r0.confianza)) : null,\n    pregunta: textoONull(r0.pregunta, 300),\n  };\n  if (r0.fecha && !r.fecha) errores.push(`fecha inválida \"${r0.fecha}\" descartada`);\n  if (r0.hora && !r.hora) errores.push(`hora inválida \"${r0.hora}\" descartada`);\n\n  if (!categoria) {\n    return { ...aRevision(r, `Categoría no reconocida: \"${categoriaOriginal}\"`, null, 'categoria'), errores };\n  }\n  if (!contenido) {\n    return { ...aRevision(r, 'Registro sin contenido', '¿Qué querías guardar aquí?', 'aclaracion'), errores };\n  }\n\n  // Recordatorios relativos (\"en dos horas\"): el validador calcula la fecha exacta.\n  const despl = Number(r0.desplazamiento_minutos);\n  if (r.categoria === 'recordatorio' && Number.isFinite(despl) && despl > 0 && despl <= 60 * 24 * 60) {\n    const t = sumarMinutos(ctx.hoy, ctx.hora, Math.round(despl));\n    r.fecha = t.fecha;\n    r.hora = t.hora;\n  }\n\n  // Reclasificación manual: el usuario ya decidió la categoría, no se vuelve a dudar de ella.\n  if (!opciones.categoriaForzada) {\n    if (r.requiere_confirmacion) {\n      return { ...aRevision(r, 'El modelo pidió confirmación', r.pregunta, r.pregunta ? 'aclaracion' : 'categoria'), errores };\n    }\n    if (r.confianza !== null && r.confianza < UMBRAL_CONFIANZA) {\n      return { ...aRevision(r, `Confianza baja (${r.confianza})`, null, 'categoria'), errores };\n    }\n  }\n\n  switch (r.categoria) {\n    case 'tarea':\n      r.estado = normalizarEstadoTarea(r0.estado);\n      break;\n    case 'recordatorio':\n      if (!r.fecha || !r.hora) {\n        const falta = !r.fecha && !r.hora ? 'el día y la hora' : (!r.fecha ? 'el día' : 'la hora');\n        return { ...aRevision(r, 'Recordatorio sin fecha u hora clara',\n          `Para el recordatorio «${r.titulo}» me falta ${falta}. ¿Cuándo te aviso?`, 'aclaracion'), errores };\n      }\n      r.estado = 'programado';\n      break;\n    case 'evento':\n      if (!r.fecha) {\n        return { ...aRevision(r, 'Evento sin fecha',\n          `¿Qué día es «${r.titulo}»? (y la hora, si la sabes)`, 'aclaracion'), errores };\n      }\n      if (r.hora_fin && (!r.hora || r.hora_fin <= r.hora)) r.hora_fin = null;\n      r.estado = 'agendado';\n      break;\n    case 'idea':\n      r.estado = normalizarEstadoIdea(r0.estado);\n      r.prioridad = null;\n      break;\n    case 'conocimiento':\n      r.prioridad = null;\n      r.concepto_principal = r.concepto_principal || r.titulo;\n      break;\n    case 'otros':\n      r.prioridad = null;\n      break;\n  }\n  return { categoria_destino: r.categoria, registro: r, errores };\n}\n\n/* ---------- Validación de la salida completa ---------- */\n\nfunction validarSalida(respuesta, ctx) {\n  const leido = parsearJSON(respuesta);\n  const original = ctx.texto_original || '';\n  if (!leido.ok) {\n    // Nunca se pierde la información: va a revisión con la transcripción completa.\n    return {\n      valido: false,\n      errores: [leido.error],\n      transcripcion_original: original,\n      transcripcion_corregida: original,\n      resumen_general: original.slice(0, 200),\n      registros: [aRevision({ categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje', contenido: original, etiquetas: [] },\n        'El clasificador no devolvió un JSON válido', null, 'categoria')],\n      requiere_aclaracion: false,\n      pregunta_aclaracion: null,\n    };\n  }\n  const v = leido.valor || {};\n  const errores = [];\n  if (!Array.isArray(v.registros)) errores.push('Falta el arreglo \"registros\"');\n  const brutos = Array.isArray(v.registros) ? v.registros.slice(0, 15) : [];\n  const registros = [];\n  brutos.forEach((b, i) => {\n    const res = validarRegistro(b, ctx);\n    if (!res.registro.id_local) res.registro.id_local = `r${i + 1}`;\n    res.errores.forEach(e => errores.push(`registro ${i + 1}: ${e}`));\n    registros.push({ categoria_destino: res.categoria_destino, registro: res.registro });\n  });\n\n  const requiereAclaracion = v.requiere_aclaracion === true;\n  const pregunta = textoONull(v.pregunta_aclaracion, 300);\n\n  if (registros.length === 0) {\n    if (requiereAclaracion && pregunta) {\n      registros.push(aRevision({ categoria: 'otros', titulo: original.slice(0, 80), contenido: original, etiquetas: [] },\n        'El modelo necesita una aclaración', pregunta, 'aclaracion'));\n    } else {\n      // Regla: no descartar información que no se pudo clasificar.\n      registros.push({\n        categoria_destino: 'otros',\n        registro: {\n          categoria: 'otros', titulo: original.slice(0, 80) || 'Mensaje sin clasificar', contenido: textoONull(v.resumen_general) || original,\n          fecha: null, hora: null, etiquetas: [], area_tematica: null, id_local: 'r1', requiere_confirmacion: false,\n        },\n      });\n    }\n  }\n\n  return {\n    valido: errores.length === 0,\n    errores,\n    transcripcion_original: original, // siempre la real, nunca la reescrita por el modelo\n    transcripcion_corregida: textoONull(v.transcripcion_corregida, 20000) || original,\n    resumen_general: textoONull(v.resumen_general, 1000) || original.slice(0, 200),\n    registros,\n    requiere_aclaracion: requiereAclaracion,\n    pregunta_aclaracion: pregunta,\n  };\n}\n\n/* Esquema que se pasa a Ollama en \"format\" para forzar la estructura. */\nfunction esquemaSalida() {\n  const txt = { type: ['string', 'null'] };\n  return {\n    type: 'object',\n    properties: {\n      transcripcion_original: { type: 'string' },\n      transcripcion_corregida: { type: 'string' },\n      resumen_general: { type: 'string' },\n      registros: {\n        type: 'array',\n        items: {\n          type: 'object',\n          properties: {\n            id_local: { type: 'string' },\n            categoria: { type: 'string', enum: CATEGORIAS },\n            titulo: { type: 'string' },\n            contenido: { type: 'string' },\n            fecha: txt,\n            hora: txt,\n            hora_fin: txt,\n            desplazamiento_minutos: { type: ['integer', 'null'] },\n            prioridad: { type: ['string', 'null'], enum: ['alta', 'media', 'baja', null] },\n            estado: txt,\n            proyecto: txt,\n            lugar: txt,\n            participantes: { type: 'array', items: { type: 'string' } },\n            fuente: txt,\n            area_tematica: txt,\n            concepto_principal: txt,\n            aplicacion: txt,\n            etiquetas: { type: 'array', items: { type: 'string' } },\n            relacionado_con: txt,\n            confianza: { type: 'number' },\n            requiere_confirmacion: { type: 'boolean' },\n            pregunta: txt,\n          },\n          required: ['id_local', 'categoria', 'titulo', 'contenido', 'fecha', 'hora', 'prioridad', 'estado',\n            'proyecto', 'etiquetas', 'confianza', 'requiere_confirmacion'],\n        },\n      },\n      requiere_aclaracion: { type: 'boolean' },\n      pregunta_aclaracion: txt,\n    },\n    required: ['transcripcion_original', 'transcripcion_corregida', 'resumen_general', 'registros',\n      'requiere_aclaracion', 'pregunta_aclaracion'],\n  };\n}\n\n\n\n// ---- nodo ----\n// Nodo \"Registro reclasificado\": la categoría la eligió la persona; se valida igual (fechas, horas)\n// y se envía al mismo Switch de distribución.\nconst zona = $env.GENERIC_TIMEZONE || 'America/Santiago';\nconst a = $input.first().json;\nconst ahora = ahoraEnZona(zona);\nconst ctx = { hoy: ahora.fecha, hora: ahora.hora, zona, texto_original: a.redistribuir.registro.contenido || '' };\nconst res = validarRegistro(a.redistribuir.registro, ctx, { categoriaForzada: true });\nreturn [{ json: {\n  categoria_destino: res.categoria_destino,\n  captura_id: a.redistribuir.captura_id,\n  ejecucion_id: $execution.id,\n  chat_id: a.chat_id,\n  resumen: null,\n  registro: Object.assign(res.registro, { id_local: null, relacionado_con: null }),\n} }];\n"
+      }
+    },
+    {
+      "id": "a196ec01-3f2f-4467-a3cb-2f5a04577b96",
+      "name": "Telegram · configurar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        820
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: String('👋 Hola. Para activar tu asistente copia este número en TELEGRAM_CHAT_ID del archivo .env y reinicia n8n:\\n\\n<code>' + $json.chat_id + '</code>').slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: null || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Clasificar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar entrada": {
+      "main": [
+        [
+          {
+            "node": "Tipo de entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de entrada": {
+      "main": [
+        [
+          {
+            "node": "Telegram · ubicar audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Responde a una pregunta?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ejecutar comando",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ejecutar botón",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram · configurar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · ubicar audio": {
+      "main": [
+        [
+          {
+            "node": "Telegram · descargar audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · descargar audio": {
+      "main": [
+        [
+          {
+            "node": "Whisper · transcribir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper · transcribir": {
+      "main": [
+        [
+          {
+            "node": "Texto desde audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responde a una pregunta?": {
+      "main": [
+        [
+          {
+            "node": "Texto desde mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto desde audio": {
+      "main": [
+        [
+          {
+            "node": "Preparar prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto desde mensaje": {
+      "main": [
+        [
+          {
+            "node": "Preparar prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar prompt": {
+      "main": [
+        [
+          {
+            "node": "Telegram · escribiendo…",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · escribiendo…": {
+      "main": [
+        [
+          {
+            "node": "Ollama · clasificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama · clasificar": {
+      "main": [
+        [
+          {
+            "node": "Validar JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar JSON": {
+      "main": [
+        [
+          {
+            "node": "Guardar captura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar captura": {
+      "main": [
+        [
+          {
+            "node": "Expandir registros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expandir registros": {
+      "main": [
+        [
+          {
+            "node": "Distribuir por categoría",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Una sola vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Distribuir por categoría": {
+      "main": [
+        [
+          {
+            "node": "Guardar tarea",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Programar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar idea",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar conocimiento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar en archivo general",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar en revisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar evento": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar · crear evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar · crear evento": {
+      "main": [
+        [
+          {
+            "node": "Guardar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en revisión": {
+      "main": [
+        [
+          {
+            "node": "Telegram · preguntar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · preguntar": {
+      "main": [
+        [
+          {
+            "node": "Registrar pregunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una sola vez": {
+      "main": [
+        [
+          {
+            "node": "Armar confirmación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar confirmación": {
+      "main": [
+        [
+          {
+            "node": "Telegram · confirmación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar botón": {
+      "main": [
+        [
+          {
+            "node": "Telegram · responder botón",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar comando": {
+      "main": [
+        [
+          {
+            "node": "Resultado de la acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · responder botón": {
+      "main": [
+        [
+          {
+            "node": "Resultado del botón",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado del botón": {
+      "main": [
+        [
+          {
+            "node": "Resultado de la acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de la acción": {
+      "main": [
+        [
+          {
+            "node": "Telegram · respuesta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Quitar de Google Calendar?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Reclasificar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Quitar de Google Calendar?": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar · eliminar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Reclasificar?": {
+      "main": [
+        [
+          {
+            "node": "Registro reclasificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registro reclasificado": {
+      "main": [
+        [
+          {
+            "node": "Distribuir por categoría",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Una sola vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

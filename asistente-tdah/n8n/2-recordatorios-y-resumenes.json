@@ -1,0 +1,432 @@
+{
+  "id": "asistTdahProgram",
+  "name": "Asistente TDAH · 2 Recordatorios y resúmenes",
+  "active": false,
+  "nodes": [
+    {
+      "id": "e0b29c98-71fc-44b1-aff2-aa7700f346b8",
+      "name": "Nota · Programación",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -360
+      ],
+      "parameters": {
+        "content": "## ⏰ Avisos automáticos\n- Cada minuto: envía los recordatorios vencidos (con botones Hecho / +1 h / Mañana) y vuelve a insistir hasta 2 veces si no los confirmas.\n- 08:00: plan del día + lo que quedó en el tintero.\n- 21:00: cierre del día.\n- Domingo 19:00: resumen semanal con rendimiento.\nHorarios en la zona de GENERIC_TIMEZONE.",
+        "width": 480,
+        "height": 260,
+        "color": 4
+      }
+    },
+    {
+      "id": "a2e9d1f4-928a-4243-a910-3f7796e7e23b",
+      "name": "Cada minuto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4de18235-b544-45f5-abc8-c0a0e180130b",
+      "name": "Tomar recordatorios vencidos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT liberar_recordatorios_trabados(); SELECT r FROM reclamar_recordatorios() AS r;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "4d38c429-5fd9-4013-a743-c764384f19bf",
+      "name": "¿Hay avisos?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().filter(i => i.json && i.json.r && i.json.r.id);"
+      }
+    },
+    {
+      "id": "ab146fe8-24e9-43a5-a480-b69257954d82",
+      "name": "Telegram · enviar recordatorio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.r.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "a29af4a8-b061-44a9-ab31-5b7bb19038cd",
+      "name": "Marcar enviado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT marcar_recordatorio_enviado($1::int, $2::bigint)",
+        "options": {
+          "queryReplacement": "={{ [ $('¿Hay avisos?').item.json.r.id, $json.result.message_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "769a5cd6-afbe-403d-afc1-bb31bbcb1960",
+      "name": "Mañana 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        220
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "80cde85f-e696-4451-a544-9e34352bb107",
+      "name": "Resumen · resumen_diario",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        220
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resumen_diario() AS r",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "a648b0d6-ddde-40e4-aad8-09ff1fec4e69",
+      "name": "Telegram · resumen_diario",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.r.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "2d9fff15-0c26-4360-a38c-9c4422a75967",
+      "name": "Noche 21:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 21 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1f0b6f5f-67bf-4c2e-a054-4d135058f003",
+      "name": "Resumen · resumen_noche",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        400
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resumen_noche() AS r",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "0e905e19-aedb-4f44-a784-607f397faf14",
+      "name": "Telegram · resumen_noche",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.r.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "6f85eb33-d4e4-4bf1-a2b5-359ff393cea3",
+      "name": "Domingo 19:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        580
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 19 * * 0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "0feacb71-b550-4608-acd2-673e5382a2df",
+      "name": "Resumen · resumen_semanal",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        580
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resumen_semanal() AS r",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "asistPostgres001",
+          "name": "Postgres Asistente"
+        }
+      }
+    },
+    {
+      "id": "cd4a3a3a-1030-4899-a491-74e7f7a563c0",
+      "name": "Telegram · resumen_semanal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        580
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TELEGRAM_API_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.TELEGRAM_CHAT_ID, text: String($json.r.texto).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: $json.r.teclado || undefined }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Tomar recordatorios vencidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar recordatorios vencidos": {
+      "main": [
+        [
+          {
+            "node": "¿Hay avisos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay avisos?": {
+      "main": [
+        [
+          {
+            "node": "Telegram · enviar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram · enviar recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Marcar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mañana 08:00": {
+      "main": [
+        [
+          {
+            "node": "Resumen · resumen_diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen · resumen_diario": {
+      "main": [
+        [
+          {
+            "node": "Telegram · resumen_diario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Noche 21:00": {
+      "main": [
+        [
+          {
+            "node": "Resumen · resumen_noche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen · resumen_noche": {
+      "main": [
+        [
+          {
+            "node": "Telegram · resumen_noche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domingo 19:00": {
+      "main": [
+        [
+          {
+            "node": "Resumen · resumen_semanal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen · resumen_semanal": {
+      "main": [
+        [
+          {
+            "node": "Telegram · resumen_semanal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
